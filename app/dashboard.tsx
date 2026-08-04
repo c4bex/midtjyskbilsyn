@@ -2,35 +2,40 @@
 
 import {
   Bell,
+  Building2,
   CalendarDays,
   CarFront,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleHelp,
   Clock3,
   FileText,
-  Gauge,
   LayoutDashboard,
   Menu,
+  MoreHorizontal,
   Plus,
   Search,
   Settings,
   ShieldCheck,
+  UserRound,
   Users,
   X,
 } from "lucide-react";
 import { useState } from "react";
 
+type CustomerType = "privat" | "erhverv";
+type BookingStatus = "bekræftet" | "ankommet" | "afventer" | "færdig";
+
 type Booking = {
   time: string;
-  duration: number;
   customer: string;
+  customerType: CustomerType;
   plate: string;
   vehicle: string;
-  type: string;
-  status: "bekræftet" | "ankommet" | "afventer";
-  column: number;
+  inspection: string;
+  status: BookingStatus;
 };
 
 const nav = [
@@ -41,41 +46,44 @@ const nav = [
   { label: "Fakturering", icon: FileText, badge: "4" },
 ];
 
-const days = [
-  { weekday: "Mandag", date: "3. aug.", count: 9 },
-  { weekday: "Tirsdag", date: "4. aug.", count: 11, today: true },
-  { weekday: "Onsdag", date: "5. aug.", count: 8 },
-  { weekday: "Torsdag", date: "6. aug.", count: 10 },
-  { weekday: "Fredag", date: "7. aug.", count: 7 },
-];
-
 const bookings: Booking[] = [
-  { time: "07:30", duration: 60, customer: "Maja Holm", plate: "AB 12 345", vehicle: "VW Golf", type: "Periodisk syn", status: "bekræftet", column: 0 },
-  { time: "08:00", duration: 45, customer: "Jysk VVS ApS", plate: "CF 45 821", vehicle: "Ford Transit", type: "Periodisk syn", status: "ankommet", column: 1 },
-  { time: "08:30", duration: 45, customer: "Thomas Dahl", plate: "DL 76 119", vehicle: "Tesla Model 3", type: "Omsyn", status: "bekræftet", column: 2 },
-  { time: "09:15", duration: 45, customer: "Anne Skov", plate: "EH 22 604", vehicle: "Peugeot 208", type: "Periodisk syn", status: "afventer", column: 3 },
-  { time: "09:45", duration: 60, customer: "Murerfirma Lund", plate: "FA 91 037", vehicle: "Mercedes Sprinter", type: "Varebilssyn", status: "bekræftet", column: 4 },
-  { time: "10:15", duration: 45, customer: "Søren Bech", plate: "GB 18 530", vehicle: "Skoda Enyaq", type: "Periodisk syn", status: "bekræftet", column: 0 },
-  { time: "10:45", duration: 45, customer: "Lone Madsen", plate: "HR 63 044", vehicle: "Toyota Yaris", type: "Omsyn", status: "bekræftet", column: 1 },
-  { time: "11:30", duration: 45, customer: "Fjord Transport", plate: "JK 37 995", vehicle: "Iveco Daily", type: "Varebilssyn", status: "afventer", column: 2 },
-  { time: "12:30", duration: 45, customer: "Emil Nygaard", plate: "KT 40 188", vehicle: "Volvo XC40", type: "Periodisk syn", status: "bekræftet", column: 3 },
-  { time: "13:15", duration: 45, customer: "Line Friis", plate: "LP 88 271", vehicle: "Kia Niro", type: "Periodisk syn", status: "bekræftet", column: 4 },
-  { time: "14:00", duration: 45, customer: "Niels Bak", plate: "MR 51 620", vehicle: "Audi A4", type: "Omsyn", status: "bekræftet", column: 0 },
-  { time: "14:30", duration: 60, customer: "Hedens Montage", plate: "ND 70 416", vehicle: "Renault Master", type: "Varebilssyn", status: "bekræftet", column: 1 },
+  { time: "08:00", customer: "Jysk VVS ApS", customerType: "erhverv", plate: "CF 45 821", vehicle: "Ford Transit", inspection: "Periodisk syn", status: "færdig" },
+  { time: "08:20", customer: "Maja Holm", customerType: "privat", plate: "AB 12 345", vehicle: "VW Golf", inspection: "Periodisk syn", status: "færdig" },
+  { time: "08:40", customer: "Thomas Dahl", customerType: "privat", plate: "DL 76 119", vehicle: "Tesla Model 3", inspection: "Omsyn", status: "ankommet" },
+  { time: "09:20", customer: "Anne Skov", customerType: "privat", plate: "EH 22 604", vehicle: "Peugeot 208", inspection: "Periodisk syn", status: "bekræftet" },
+  { time: "09:40", customer: "Murerfirma Lund", customerType: "erhverv", plate: "FA 91 037", vehicle: "Mercedes Sprinter", inspection: "Varebilssyn", status: "bekræftet" },
+  { time: "10:00", customer: "Søren Bech", customerType: "privat", plate: "GB 18 530", vehicle: "Skoda Enyaq", inspection: "Periodisk syn", status: "afventer" },
+  { time: "10:20", customer: "Lone Madsen", customerType: "privat", plate: "HR 63 044", vehicle: "Toyota Yaris", inspection: "Omsyn", status: "bekræftet" },
+  { time: "10:40", customer: "Fjord Transport", customerType: "erhverv", plate: "JK 37 995", vehicle: "Iveco Daily", inspection: "Varebilssyn", status: "bekræftet" },
+  { time: "11:00", customer: "Emil Nygaard", customerType: "privat", plate: "KT 40 188", vehicle: "Volvo XC40", inspection: "Periodisk syn", status: "bekræftet" },
+  { time: "11:40", customer: "Line Friis", customerType: "privat", plate: "LP 88 271", vehicle: "Kia Niro", inspection: "Periodisk syn", status: "bekræftet" },
+  { time: "12:00", customer: "Niels Bak", customerType: "privat", plate: "MR 51 620", vehicle: "Audi A4", inspection: "Omsyn", status: "bekræftet" },
 ];
 
-const times = ["07", "08", "09", "10", "11", "12", "13", "14", "15", "16"];
+const weeks = [
+  { day: "Man", date: "3", count: 9 },
+  { day: "Tir", date: "4", count: 11, active: true },
+  { day: "Ons", date: "5", count: 8 },
+  { day: "Tor", date: "6", count: 10 },
+  { day: "Fre", date: "7", count: 7 },
+];
 
-const offsetFor = (time: string) => {
-  const [hours, minutes] = time.split(":").map(Number);
-  return (hours - 7) * 72 + (minutes / 60) * 72;
+const statusText: Record<BookingStatus, string> = {
+  bekræftet: "Bekræftet",
+  ankommet: "Ankommet",
+  afventer: "Afventer",
+  færdig: "Færdig",
 };
 
 export function Dashboard() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [view, setView] = useState<"uge" | "dag">("uge");
+  const [filter, setFilter] = useState<"alle" | CustomerType>("alle");
   const [modalOpen, setModalOpen] = useState(false);
   const [notice, setNotice] = useState("");
+
+  const visibleBookings = filter === "alle" ? bookings : bookings.filter((booking) => booking.customerType === filter);
+  const privateCount = bookings.filter((booking) => booking.customerType === "privat").length;
+  const businessCount = bookings.length - privateCount;
 
   const flash = (message: string) => {
     setNotice(message);
@@ -106,7 +114,7 @@ export function Dashboard() {
         </nav>
         <div className="sidebar-status">
           <div className="status-line"><i /><span>Systemet kører normalt</span></div>
-          <small>Senest kontrolleret 08:02</small>
+          <small>Senest kontrolleret 10:58</small>
         </div>
         <button className="profile" onClick={() => flash("Profilmenu kommer i næste etape")}>
           <span className="avatar">RM</span><span><strong>Rasmus M.</strong><small>Administrator</small></span><ChevronDown size={16} />
@@ -130,84 +138,80 @@ export function Dashboard() {
           <section className="page-heading">
             <div>
               <p className="eyebrow">Tirsdag · 4. august 2026</p>
-              <h1>Godmorgen, Rasmus</h1>
-              <p>Her er dagens aftaler og den kommende uge.</p>
+              <h1>Dagens bookinger</h1>
+              <p>Hurtigt overblik over hvem og hvad der kommer i dag.</p>
             </div>
             <button className="primary-button" onClick={() => setModalOpen(true)}><Plus size={18} /> Ny booking</button>
           </section>
 
-          <section className="metrics" aria-label="Dagens nøgletal">
-            <article>
-              <span className="metric-icon blue"><CalendarDays size={20} /></span>
-              <div><small>Bookinger i dag</small><strong>11</strong><p><b>8</b> bekræftet · 3 afventer</p></div>
-            </article>
-            <article>
-              <span className="metric-icon green"><Gauge size={20} /></span>
-              <div><small>Kapacitet</small><strong>78%</strong><p>3 ledige tider i dag</p></div>
-              <div className="mini-ring" style={{ "--value": "78%" } as React.CSSProperties}><span /></div>
-            </article>
-            <article>
-              <span className="metric-icon amber"><Clock3 size={20} /></span>
-              <div><small>Venter på handling</small><strong>4</strong><p>Fakturaer skal klargøres</p></div>
-              <button className="arrow-button" aria-label="Gå til fakturering" onClick={() => flash("Fakturaklargøring åbnes i næste etape")}><ChevronRight size={18} /></button>
-            </article>
-            <article>
-              <span className="metric-icon slate"><CarFront size={20} /></span>
-              <div><small>Gennemført i dag</small><strong>3</strong><p>Seneste syn kl. 09:18</p></div>
-            </article>
+          <section className="day-summary" aria-label="Dagens nøgletal">
+            <div><span>Bookinger</span><strong>{bookings.length}</strong></div>
+            <div><span className="summary-icon private"><UserRound size={15} /></span><p><strong>{privateCount}</strong><small>Private</small></p></div>
+            <div><span className="summary-icon business"><Building2 size={15} /></span><p><strong>{businessCount}</strong><small>Erhverv</small></p></div>
+            <div><span className="summary-icon available"><Clock3 size={15} /></span><p><strong>2</strong><small>Ledige tider</small></p></div>
+            <button onClick={() => flash("Ugeoversigten åbnes i næste etape")}>Se hele ugen <ChevronRight size={16} /></button>
           </section>
 
-          <section className="calendar-card">
-            <div className="calendar-toolbar">
-              <div className="calendar-title"><h2>Bookingoversigt</h2><span>45 aftaler denne uge</span></div>
-              <div className="calendar-controls">
-                <div className="segmented" role="group" aria-label="Kalendervisning">
-                  <button className={view === "dag" ? "selected" : ""} onClick={() => setView("dag")}>Dag</button>
-                  <button className={view === "uge" ? "selected" : ""} onClick={() => setView("uge")}>Uge</button>
-                </div>
-                <button className="date-nav" aria-label="Forrige uge" onClick={() => flash("Forrige uge valgt")}><ChevronLeft size={18} /></button>
-                <button className="today-button" onClick={() => flash("Kalenderen står på denne uge")}>I dag</button>
-                <button className="date-nav" aria-label="Næste uge" onClick={() => flash("Næste uge valgt")}><ChevronRight size={18} /></button>
-              </div>
-            </div>
-
-            <div className={`calendar-scroll ${view === "dag" ? "day-view" : ""}`}>
-              <div className="calendar-grid">
-                <div className="time-head">August</div>
-                {days.map((day) => (
-                  <div className={`day-head ${day.today ? "today" : ""}`} key={day.weekday}>
-                    <div><strong>{day.weekday}</strong><span>{day.date}</span></div><em>{day.count}</em>
-                  </div>
-                ))}
-                <div className="timeline">
-                  {times.map((time) => <span key={time} style={{ top: `${(Number(time) - 7) * 72}px` }}>{time}:00</span>)}
-                </div>
-                {days.map((day, index) => (
-                  <div className={`day-column ${day.today ? "today-column" : ""}`} key={day.weekday}>
-                    {times.map((time) => <div className="hour-line" key={time} style={{ top: `${(Number(time) - 7) * 72}px` }} />)}
-                    {index === 1 && <div className="now-line" style={{ top: `${offsetFor("09:42")}px` }}><i /></div>}
-                    {bookings.filter((booking) => booking.column === index).map((booking) => (
-                      <button
-                        className={`booking ${booking.status}`}
-                        key={`${booking.time}-${booking.plate}`}
-                        style={{ top: `${offsetFor(booking.time) + 4}px`, height: `${Math.max(booking.duration * 0.92, 42)}px` }}
-                        onClick={() => flash(`${booking.customer} · ${booking.plate}`)}
-                      >
-                        <span className="booking-time">{booking.time}</span>
-                        <strong>{booking.customer}</strong>
-                        <span>{booking.plate} · {booking.vehicle}</span>
-                        <small>{booking.type}</small>
-                      </button>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="legend">
-              <span><i className="confirmed-dot" /> Bekræftet</span><span><i className="arrived-dot" /> Ankommet</span><span><i className="pending-dot" /> Afventer svar</span>
-              <button onClick={() => flash("Åbningstider: 07:00–16:30")}>Vis åbningstider <ChevronRight size={15} /></button>
-            </div>
+          <section className="week-strip" aria-label="Ugens dage">
+            <button className="week-arrow" aria-label="Forrige uge" onClick={() => flash("Forrige uge valgt")}><ChevronLeft size={18} /></button>
+            {weeks.map((item) => (
+              <button key={item.day} className={item.active ? "active" : ""} onClick={() => flash(`${item.day} ${item.date}. august valgt`)}>
+                <span>{item.day}</span><strong>{item.date}</strong><small>{item.count} bookinger</small>
+              </button>
+            ))}
+            <button className="week-arrow" aria-label="Næste uge" onClick={() => flash("Næste uge valgt")}><ChevronRight size={18} /></button>
           </section>
+
+          <div className="day-layout">
+            <section className="booking-list-card">
+              <div className="list-toolbar">
+                <div><h2>Tirsdag den 4. august</h2><span>Sorteret efter tidspunkt</span></div>
+                <div className="customer-filters" role="group" aria-label="Filtrer efter kundetype">
+                  <button className={filter === "alle" ? "selected" : ""} onClick={() => setFilter("alle")}>Alle <span>{bookings.length}</span></button>
+                  <button className={filter === "privat" ? "selected" : ""} onClick={() => setFilter("privat")}>Private <span>{privateCount}</span></button>
+                  <button className={filter === "erhverv" ? "selected" : ""} onClick={() => setFilter("erhverv")}>Erhverv <span>{businessCount}</span></button>
+                </div>
+              </div>
+
+              <div className="booking-table" role="table" aria-label="Dagens bookinger">
+                <div className="table-head" role="row">
+                  <span role="columnheader">Tid</span><span role="columnheader">Kunde</span><span role="columnheader">Bil</span><span role="columnheader">Syn</span><span role="columnheader">Status</span><span />
+                </div>
+                <div className="table-body">
+                  {visibleBookings.map((booking) => (
+                    <button className="booking-row" role="row" key={`${booking.time}-${booking.plate}`} onClick={() => flash(`${booking.customer} · ${booking.plate}`)}>
+                      <span className="row-time" role="cell">{booking.time}</span>
+                      <span className="row-customer" role="cell">
+                        <i className={booking.customerType}>{booking.customerType === "erhverv" ? <Building2 size={14} /> : <UserRound size={14} />}</i>
+                        <span><strong>{booking.customer}</strong><small>{booking.customerType === "erhverv" ? "Erhverv" : "Privat"}</small></span>
+                      </span>
+                      <span className="row-vehicle" role="cell"><strong>{booking.plate}</strong><small>{booking.vehicle}</small></span>
+                      <span className="row-inspection" role="cell">{booking.inspection}</span>
+                      <span role="cell"><em className={`status ${booking.status}`}>{booking.status === "færdig" && <Check size={12} />}{statusText[booking.status]}</em></span>
+                      <span className="row-action" role="cell"><MoreHorizontal size={18} /></span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <aside className="day-aside">
+              <section className="available-card">
+                <div className="aside-title"><span className="aside-icon"><Clock3 size={18} /></span><div><h2>Ledige tider</h2><p>I dag</p></div></div>
+                <div className="available-times">
+                  <button onClick={() => setModalOpen(true)}>11:20 <Plus size={15} /></button>
+                  <button onClick={() => setModalOpen(true)}>14:20 <Plus size={15} /></button>
+                </div>
+                <button className="secondary-wide" onClick={() => flash("Alle ledige tider vises i næste etape")}>Se alle ledige tider</button>
+              </section>
+
+              <section className="progress-card">
+                <div className="aside-title"><span className="aside-icon green"><Check size={18} /></span><div><h2>Dagens fremdrift</h2><p>3 af 11 gennemført</p></div></div>
+                <div className="progress-track"><span /></div>
+                <div className="progress-legend"><span><i /> 3 færdige</span><span><i /> 8 tilbage</span></div>
+              </section>
+            </aside>
+          </div>
         </div>
       </main>
 
@@ -218,9 +222,10 @@ export function Dashboard() {
           <section className="modal" role="dialog" aria-modal="true" aria-labelledby="new-booking-title" onMouseDown={(event) => event.stopPropagation()}>
             <div className="modal-heading"><div><span>Ny aftale</span><h2 id="new-booking-title">Opret booking</h2></div><button aria-label="Luk" onClick={() => setModalOpen(false)}><X size={20} /></button></div>
             <div className="form-grid">
+              <label className="full">Kundetype<select defaultValue="privat"><option value="privat">Privatkunde</option><option value="erhverv">Erhvervskunde</option></select></label>
               <label className="full">Kunde<input placeholder="Søg på navn eller telefon" /></label>
               <label>Dato<input type="date" defaultValue="2026-08-04" /></label>
-              <label>Tid<input type="time" defaultValue="10:30" /></label>
+              <label>Tid<input type="time" defaultValue="11:20" /></label>
               <label>Registreringsnummer<input placeholder="AB 12 345" /></label>
               <label>Synstype<select defaultValue="periodisk"><option value="periodisk">Periodisk syn</option><option value="omsyn">Omsyn</option><option value="varebil">Varebilssyn</option></select></label>
             </div>

@@ -16,9 +16,12 @@ test("server-renderer den danske bookingoversigt", async () => {
   const html = await response.text();
   assert.match(html, /<html lang="da">/i);
   assert.match(html, /<title>Driftsoverblik \| Midtjysk Bilsyn<\/title>/i);
-  assert.match(html, /Bookingoversigt/);
+  assert.match(html, /Dagens bookinger/);
   assert.match(html, /Ny booking/);
-  assert.match(html, /Bookinger i dag/);
+  assert.match(html, /Filtrer efter kundetype/);
+  assert.match(html, /Private/);
+  assert.match(html, /Erhverv/);
+  assert.match(html, /Ledige tider/);
   assert.match(html, /AB 12 345/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/i);
 });
