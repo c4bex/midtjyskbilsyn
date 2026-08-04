@@ -272,7 +272,7 @@ export function Dashboard() {
       const response = await fetch(selectedBooking ? `/api/bookings/${selectedBooking.id}` : "/api/bookings", {
         method: selectedBooking ? "PATCH" : "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, phone: smsPhone }),
       });
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error ?? "Bookingen kunne ikke gemmes");

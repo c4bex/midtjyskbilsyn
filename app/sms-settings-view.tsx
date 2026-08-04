@@ -9,6 +9,8 @@ const defaults: Settings = { confirmation: true, reminder: true, reminderHours: 
 
 export function SmsSettingsView({ onNotify }: Props) {
   const [settings, setSettings] = useState<Settings>(() => { try { const stored = typeof window === "undefined" ? null : localStorage.getItem("mb-sms-settings"); return stored ? { ...defaults, ...JSON.parse(stored) as Partial<Settings> } : defaults; } catch { return defaults; } });
+  const [queueTotal, setQueueTotal] = useState<number | null>(null);
+  useEffect(() => { fetch("/api/sms/queue", { cache: "no-store" }).then((response) => response.ok ? response.json() as Promise<{ total: number }> : Promise.reject()).then((data) => setQueueTotal(data.total)).catch(() => undefined); }, []);
   const update = <K extends keyof Settings>(key: K, value: Settings[K]) => setSettings((current) => ({ ...current, [key]: value }));
   const save = () => { localStorage.setItem("mb-sms-settings", JSON.stringify(settings)); onNotify("SMS-indstillingerne er gemt på denne enhed"); };
   return <div className="module-view sms-settings-view">
@@ -24,7 +26,7 @@ export function SmsSettingsView({ onNotify }: Props) {
         <div className="settings-time-grid"><label className="smart-field">Ingen SMS fra<input type="time" value={settings.quietStart} onChange={(event) => update("quietStart", event.target.value)} /></label><label className="smart-field">Ingen SMS til<input type="time" value={settings.quietEnd} onChange={(event) => update("quietEnd", event.target.value)} /></label></div>
       </article>
     </section>
-    <section className="settings-note"><ShieldCheck size={18} /><div><strong>Sikker standard</strong><p>API-nøgler og adgang til GatewayAPI håndteres senere på serveren. De gemmes aldrig i browseren.</p></div></section>
+    <section className="settings-note"><ShieldCheck size={18} /><div><strong>Sikker standard</strong><p>API-nøgler og adgang til GatewayAPI håndteres senere på serveren. De gemmes aldrig i browseren.</p><small>Lokal SMS-kø: {queueTotal ?? "…"} poster</small></div></section>
     <div className="settings-actions"><button className="primary-button" onClick={save}><Check size={16} /> Gem indstillinger</button></div>
   </div>;
 }
