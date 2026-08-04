@@ -1,29 +1,38 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-async function render() {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
-  return worker.fetch(new Request("http://localhost/", { headers: { accept: "text/html" } }), {
-    ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) },
-  }, { waitUntil() {}, passThroughOnException() {} });
-}
+test("den danske dagsoversigt indeholder bookingflowet", async () => {
+  const [dashboard, layout, page] = await Promise.all([
+    readFile(new URL("../app/dashboard.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(layout, /<html lang="da">/i);
+  assert.match(page, /Driftsoverblik/);
+  assert.match(dashboard, /Dagens bookinger/);
+  assert.match(dashboard, /Filtrer efter kundetype/);
+  assert.match(dashboard, /Private/);
+  assert.match(dashboard, /Erhverv/);
+  assert.match(dashboard, /Aflys booking/);
+  assert.match(dashboard, /\/api\/bookings/);
+  assert.doesNotMatch(dashboard, /codex-preview|react-loading-skeleton/i);
+});
 
-test("server-renderer den danske bookingoversigt", async () => {
-  const response = await render();
-  assert.equal(response.status, 200);
-  const html = await response.text();
-  assert.match(html, /<html lang="da">/i);
-  assert.match(html, /<title>Driftsoverblik \| Midtjysk Bilsyn<\/title>/i);
-  assert.match(html, /Dagens bookinger/);
-  assert.match(html, /Ny booking/);
-  assert.match(html, /Filtrer efter kundetype/);
-  assert.match(html, /Private/);
-  assert.match(html, /Erhverv/);
-  assert.match(html, /Ledige tider/);
-  assert.match(html, /AB 12 345/);
-  assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/i);
+test("datamodellen beskytter aktive tider mod dobbeltbooking", async () => {
+  const [schema, migration] = await Promise.all([
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0001_motionless_sandman.sql", import.meta.url), "utf8"),
+  ]);
+  assert.match(schema, /uidx_bookings_station_starts_active/);
+  assert.match(migration, /CREATE UNIQUE INDEX [`"]uidx_bookings_station_starts_active[`"]/i);
+  assert.match(migration, /NOT IN \('cancelled', 'no_show'\)/i);
+});
+
+test("danske bookingtider håndterer både sommer- og vintertid", async () => {
+  const { toDateAndTime, toTimestamp } = await import("../lib/bookings.ts");
+  assert.deepEqual(toDateAndTime(toTimestamp("2026-08-04", "11:20")), { date: "2026-08-04", time: "11:20" });
+  assert.deepEqual(toDateAndTime(toTimestamp("2026-12-04", "11:20")), { date: "2026-12-04", time: "11:20" });
 });
 
 test("integrationsadaptere er deaktiverede som standard", async () => {

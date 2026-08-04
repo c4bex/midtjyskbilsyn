@@ -1,6 +1,6 @@
 # Midtjysk Bilsyn Drift
 
-Selvstændigt greenfield-system til booking og daglig drift hos Midtjysk Bilsyn. Første etape er en responsiv, interaktiv prototype med fiktive data. Ingen eksterne integrationer eller databasebindinger er aktive.
+Selvstændigt greenfield-system til booking og daglig drift hos Midtjysk Bilsyn. Bookingoversigten bruger en separat lokal D1-database med fiktive data. Eksterne integrationer er fortsat deaktiverede.
 
 ## Lokal start
 

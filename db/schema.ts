@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const timestamps = {
@@ -78,6 +79,9 @@ export const bookings = sqliteTable("bookings", {
   index("idx_bookings_station_starts_at").on(table.stationId, table.startsAt),
   index("idx_bookings_vehicle_starts_at").on(table.vehicleId, table.startsAt),
   uniqueIndex("uidx_bookings_source_reference").on(table.source, table.sourceReference),
+  uniqueIndex("uidx_bookings_station_starts_active")
+    .on(table.stationId, table.startsAt)
+    .where(sql`${table.status} NOT IN ('cancelled', 'no_show')`),
 ]);
 
 export const invoices = sqliteTable("invoices", {

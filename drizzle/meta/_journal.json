@@ -8,6 +8,13 @@
       "when": 1785834264636,
       "tag": "0000_premium_bishop",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1785835447777,
+      "tag": "0001_motionless_sandman",
+      "breakpoints": true
     }
   ]
 }

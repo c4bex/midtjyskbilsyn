@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `uidx_bookings_station_starts_active` ON `bookings` (`station_id`,`starts_at`) WHERE "bookings"."status" NOT IN ('cancelled', 'no_show');

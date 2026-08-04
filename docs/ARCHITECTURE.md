@@ -4,7 +4,7 @@
 
 Systemet er et selvstændigt TypeScript-projekt med React/Next-kompatibel brugerflade via vinext, Cloudflare Worker-kompatibel serverkode, SQLite/D1 og Drizzle til data. Det giver én kodebase, hurtig lokal udvikling og en enkel vej til senere serverdrift. Projektet har eget Git-repository og anvender ingen filer, database eller port fra ARVO.
 
-Prototypen er bevidst uden aktiv databasebinding og uden eksterne kald. `.openai/hosting.json` har derfor `d1: null`. Den første datamodel er defineret og migrationsklar, men aktiveres først sammen med et kontrolleret testdatasæt.
+Bookingdelen har nu sin egen D1-binding (`DB`) og et kontrolleret, fiktivt startdatasæt. Opret, redigér og aflys gemmes persistent lokalt og skriver audit-hændelser med aktør-id. Lokal udvikling tillades kun på loopback; en senere hostet API kræver platformens autentificerede brugerheaders og sitet skal samtidig have en privat workspace-adgangspolitik. Der foretages fortsat ingen eksterne kald.
 
 ## Moduler
 

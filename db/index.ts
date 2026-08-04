@@ -11,3 +11,10 @@ export function getDb() {
 
   return drizzle(env.DB, { schema });
 }
+
+export function getD1() {
+  if (!env.DB) {
+    throw new Error("Databasebindingen DB er ikke tilgængelig.");
+  }
+  return env.DB;
+}
