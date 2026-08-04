@@ -441,7 +441,7 @@ export function Dashboard() {
                   <button className={form.customerType === "business" ? "selected business" : "business"} onClick={() => setForm({ ...form, customerType: "business", customer: "" })}><Building2 size={16} /><span><strong>Erhvervskunde</strong><small>Vælg fra kundelisten</small></span></button>
                 </div>
                 {form.customerType === "private" ? (
-                  <label className="smart-field">Kundens navn<input value={form.customer} onChange={(event) => setForm({ ...form, customer: event.target.value })} placeholder="Skriv navn" /></label>
+                  <label className="smart-field">Kundens navn<input autoFocus={!selectedBooking} value={form.customer} onChange={(event) => setForm({ ...form, customer: event.target.value })} placeholder="Skriv navn" /></label>
                 ) : (
                   <div className="business-select">
                     <label className="smart-field">Find erhvervskunde<span className="field-with-icon"><Search size={16} /><input value={businessQuery} onChange={(event) => { setBusinessQuery(event.target.value); setForm({ ...form, customer: "" }); }} placeholder="Søg virksomhed eller nummerplade" /></span></label>
