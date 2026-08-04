@@ -44,6 +44,7 @@ type Booking = {
 
 type CustomerOption = { id: string; name: string; customerType: CustomerType; vehicles: Array<{ id: string; plate: string; vehicle: string }> };
 type VehicleLookup = { found: boolean; source: string; vehicle?: { registration: string; make: string | null; model: string | null }; customer?: { name: string; customerType: CustomerType }; lastInspectionDate?: string | null; inspectionDueDate?: string | null; dmr: { enabled: boolean; status: string } };
+type WeekDay = { date: string; weekday: number; closed: boolean; totalSlots: number; bookedSlots: number; availableSlots: string[] };
 
 const nav = [
   { id: "bookings", label: "Dagens bookinger", icon: CalendarDays },
@@ -65,13 +66,10 @@ const initialBookings: Booking[] = [
   { id: "demo-booking-12", date: "2026-08-04", time: "12:00", customer: "Niels Bak", customerType: "private", plate: "MR 51 620", vehicle: "Audi A4", inspection: "Omsyn", status: "confirmed" },
 ];
 
-const weeks = [
-  { day: "Man", date: "3", count: 9 },
-  { day: "Tir", date: "4", count: 21, active: true },
-  { day: "Ons", date: "5", count: 8 },
-  { day: "Tor", date: "6", count: 10 },
-  { day: "Fre", date: "7", count: 7 },
-];
+const dayNames = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag", "Søndag"];
+const addDays = (date: string, amount: number) => { const value = new Date(`${date}T12:00:00Z`); value.setUTCDate(value.getUTCDate() + amount); return value.toISOString().slice(0, 10); };
+const dayNumber = (date: string) => Number(date.slice(-2));
+const monthName = (date: string) => new Intl.DateTimeFormat("da-DK", { month: "short", timeZone: "Europe/Copenhagen" }).format(new Date(`${date}T12:00:00Z`)).replace(".", "");
 
 const statusText: Record<BookingStatus, string> = {
   confirmed: "Bekræftet",
@@ -99,6 +97,13 @@ export function Dashboard() {
   const [vehicleLookup, setVehicleLookup] = useState<VehicleLookup | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [slotsLoading, setSlotsLoading] = useState(false);
+  const [weekStart, setWeekStart] = useState("2026-08-03");
+  const [weekNumber, setWeekNumber] = useState(32);
+  const [weekDays, setWeekDays] = useState<WeekDay[]>([
+    { date: "2026-08-03", weekday: 1, closed: false, totalSlots: 23, bookedSlots: 0, availableSlots: [] },
+    { date: "2026-08-04", weekday: 2, closed: false, totalSlots: 23, bookedSlots: 21, availableSlots: ["11:20", "14:20"] },
+  ]);
+  const [weekLoading, setWeekLoading] = useState(true);
 
   const visibleBookings = filter === "alle" ? bookings : bookings.filter((booking) => booking.customerType === filter);
   const privateCount = bookings.filter((booking) => booking.customerType === "private").length;
@@ -153,6 +158,21 @@ export function Dashboard() {
 
   useEffect(() => {
     let active = true;
+    fetch(`/api/calendar/week?start=${weekStart}`, { cache: "no-store" })
+      .then((response) => { if (!response.ok) throw new Error(); return response.json() as Promise<{ week: number; days: WeekDay[] }>; })
+      .then((data) => { if (active) { setWeekNumber(data.week); setWeekDays(data.days); } })
+      .catch(() => { if (active) flash("Ugekapaciteten kunne ikke hentes"); })
+      .finally(() => { if (active) setWeekLoading(false); });
+    return () => { active = false; };
+  }, [flash, weekStart]);
+
+  const changeWeek = (days: number) => {
+    setWeekLoading(true);
+    setWeekStart((current) => addDays(current, days));
+  };
+
+  useEffect(() => {
+    let active = true;
     fetch("/api/customers", { cache: "no-store" })
       .then((response) => response.ok ? response.json() as Promise<{ customers: CustomerOption[] }> : Promise.reject())
       .then((data) => { if (active) setCustomerOptions(data.customers); })
@@ -191,13 +211,19 @@ export function Dashboard() {
     finally { setLookupLoading(false); }
   };
 
-  const openCreate = (time = availableSlots[0] ?? "08:00") => {
+  const openCreate = (time = availableSlots[0] ?? "08:00", date = "2026-08-04", slots = availableSlots) => {
     setSelectedBooking(null);
-    setForm({ ...emptyForm, time });
-    setModalSlots(availableSlots);
+    setForm({ ...emptyForm, date, time });
+    setModalSlots(slots);
     setBusinessQuery("");
     setVehicleLookup(null);
     setModalOpen(true);
+  };
+
+  const openDayBooking = (day: WeekDay) => {
+    if (day.closed) return flash(`${dayNames[day.weekday - 1]} er lukket`);
+    if (day.availableSlots.length === 0) return flash(`${dayNames[day.weekday - 1]} er fuldt booket`);
+    openCreate(day.availableSlots[0], day.date, day.availableSlots);
   };
 
   const openEdit = (booking: Booking) => {
@@ -310,22 +336,32 @@ export function Dashboard() {
             <button className="primary-button" onClick={() => openCreate()}><Plus size={18} /> Ny booking</button>
           </section>
 
-          <section className="day-summary" aria-label="Dagens nøgletal">
-            <div><span>Bookinger</span><strong>{bookings.length}</strong></div>
-            <div><span className="summary-icon private"><UserRound size={15} /></span><p><strong>{privateCount}</strong><small>Private</small></p></div>
-            <div><span className="summary-icon business"><Building2 size={15} /></span><p><strong>{businessCount}</strong><small>Erhverv</small></p></div>
-            <div><span className="summary-icon available"><Clock3 size={15} /></span><p><strong>{availableSlots.length}</strong><small>Ledige tider</small></p></div>
-            <button onClick={() => flash("Ugeoversigten åbnes i næste etape")}>Se hele ugen <ChevronRight size={16} /></button>
+          <section className="week-capacity" aria-label={`Kapacitet for uge ${weekNumber}`}>
+            <div className="week-capacity-head">
+              <div className="week-identity"><span>UGE</span><strong>{weekNumber}</strong></div>
+              <div><h2>Ledige tider denne uge</h2><p>{dayNumber(weekStart)}. {monthName(weekStart)} – {dayNumber(addDays(weekStart, 6))}. {monthName(addDays(weekStart, 6))}</p></div>
+              <div className="week-navigation"><button aria-label="Forrige uge" onClick={() => changeWeek(-7)}><ChevronLeft size={18} /></button><button onClick={() => { setWeekLoading(true); setWeekStart("2026-08-03"); }}>Denne uge</button><button aria-label="Næste uge" onClick={() => changeWeek(7)}><ChevronRight size={18} /></button></div>
+            </div>
+            <div className={`capacity-days ${weekLoading ? "loading" : ""}`}>
+              {weekDays.map((day) => {
+                const available = day.availableSlots.length;
+                const fullness = day.totalSlots ? Math.round(day.bookedSlots / day.totalSlots * 100) : 0;
+                const today = day.date === "2026-08-04";
+                return <button key={day.date} disabled={weekLoading} className={`${day.closed ? "closed" : available > 0 ? "available" : "full"} ${today ? "today" : ""}`} onClick={() => openDayBooking(day)}>
+                  <span className="capacity-day-name">{dayNames[day.weekday - 1]}{today && <em>I dag</em>}</span>
+                  <strong>{dayNumber(day.date)}</strong><small>{monthName(day.date)}</small>
+                  {day.closed ? <span className="capacity-status">Lukket</span> : <><span className="capacity-status"><b>{available}</b> ledige</span><span className="capacity-bar"><i style={{ width: `${fullness}%` }} /></span></>}
+                </button>;
+              })}
+            </div>
+            <div className="week-capacity-foot"><span><i className="green-dot" /> Klik på en grøn dag for at booke</span><span><i className="gray-dot" /> Lukket</span></div>
           </section>
 
-          <section className="week-strip" aria-label="Ugens dage">
-            <button className="week-arrow" aria-label="Forrige uge" onClick={() => flash("Forrige uge valgt")}><ChevronLeft size={18} /></button>
-            {weeks.map((item) => (
-              <button key={item.day} className={item.active ? "active" : ""} onClick={() => flash(`${item.day} ${item.date}. august valgt`)}>
-                <span>{item.day}</span><strong>{item.date}</strong><small>{item.count} bookinger</small>
-              </button>
-            ))}
-            <button className="week-arrow" aria-label="Næste uge" onClick={() => flash("Næste uge valgt")}><ChevronRight size={18} /></button>
+          <section className="day-summary" aria-label="Dagens nøgletal">
+            <div><span>Bookinger i dag</span><strong>{bookings.length}</strong></div>
+            <div><span className="summary-icon private"><UserRound size={15} /></span><p><strong>{privateCount}</strong><small>Private</small></p></div>
+            <div><span className="summary-icon business"><Building2 size={15} /></span><p><strong>{businessCount}</strong><small>Erhverv</small></p></div>
+            <div><span className="summary-icon available"><Clock3 size={15} /></span><p><strong>{availableSlots.length}</strong><small>Ledige i dag</small></p></div>
           </section>
 
           <div className="day-layout">

@@ -11,6 +11,9 @@ test("den danske dagsoversigt indeholder bookingflowet", async () => {
   assert.match(layout, /<html lang="da">/i);
   assert.match(page, /Driftsoverblik/);
   assert.match(dashboard, /Dagens bookinger/);
+  assert.match(dashboard, /Ledige tider denne uge/);
+  assert.match(dashboard, /UGE/);
+  assert.match(dashboard, /openDayBooking/);
   assert.match(dashboard, /Filtrer efter kundetype/);
   assert.match(dashboard, /Private/);
   assert.match(dashboard, /Erhverv/);
@@ -19,6 +22,14 @@ test("den danske dagsoversigt indeholder bookingflowet", async () => {
   assert.match(dashboard, /CustomersView/);
   assert.match(dashboard, /AvailabilityView/);
   assert.doesNotMatch(dashboard, /codex-preview|react-loading-skeleton/i);
+});
+
+test("ugeoversigten beregner kapacitet fra åbningstider og bookinger", async () => {
+  const route = await readFile(new URL("../app/api/calendar/week/route.ts", import.meta.url), "utf8");
+  assert.match(route, /availability_rules/);
+  assert.match(route, /status NOT IN \('cancelled', 'no_show'\)/);
+  assert.match(route, /availableSlots/);
+  assert.match(route, /isoWeek/);
 });
 
 test("datamodellen beskytter aktive tider mod dobbeltbooking", async () => {
