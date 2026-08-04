@@ -284,7 +284,7 @@ export function Dashboard() {
     <div className="app-shell">
       <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
         <div className="brand">
-          <div className="brand-mark" aria-label="Midtjysk Bilsyn logo"><span><b>M</b><i>B</i></span></div>
+          <div className="brand-logo"><img src="/midtjysk-bilsyn-logo.png" alt="Midtjysk Bilsyn" /></div>
           <div><strong>Midtjysk</strong><span>Bilsyn</span></div>
           <button className="mobile-close" aria-label="Luk menu" onClick={() => setMenuOpen(false)}><X size={20} /></button>
         </div>

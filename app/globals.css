@@ -29,7 +29,8 @@ button { color: inherit; }
 .app-shell { min-height: 100vh; display: grid; grid-template-columns: 244px minmax(0, 1fr); }
 
 .sidebar { position: fixed; z-index: 40; inset: 0 auto 0 0; width: 244px; padding: 22px 14px 14px; display: flex; flex-direction: column; color: #dbe5ef; background: linear-gradient(175deg, var(--navy), var(--navy-deep)); box-shadow: 8px 0 26px rgba(14,31,51,.06); }
-.brand { height: 54px; padding: 0 10px 18px; display: flex; align-items: center; gap: 11px; border-bottom: 1px solid rgba(255,255,255,.09); }
+.brand { height: 68px; padding: 0 4px 16px; display: flex; align-items: center; gap: 11px; border-bottom: 1px solid rgba(255,255,255,.09); }
+.brand-logo { width: 190px; height: 46px; overflow: hidden; display: flex; align-items: center; border-radius: 6px; background: #000; }.brand-logo img { width: 100%; height: 100%; object-fit: cover; object-position: center; }
 .brand-mark { width: 35px; height: 35px; display: grid; place-items: center; flex: 0 0 35px; border-radius: 10px; color: var(--navy); background: #e9f0f7; box-shadow: 0 3px 12px rgba(0,0,0,.13); }
 .brand-mark span { font-family: var(--font-montserrat), Arial, sans-serif; font-size: 15px; font-weight: 850; letter-spacing: -.12em; }.brand-mark b { font-weight: 800; }.brand-mark i { color: var(--mb-yellow); font-style: normal; font-weight: 850; }
 .brand > div:nth-child(2) { display: flex; flex-direction: column; line-height: 1.03; }
