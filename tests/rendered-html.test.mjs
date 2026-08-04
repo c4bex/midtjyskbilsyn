@@ -11,6 +11,9 @@ test("den danske dagsoversigt indeholder bookingflowet", async () => {
   assert.match(layout, /<html lang="da">/i);
   assert.match(page, /Driftsoverblik/);
   assert.match(dashboard, /Dagens bookinger/);
+  assert.match(dashboard, />Ikast</);
+  assert.doesNotMatch(dashboard, />Afdeling</);
+  assert.match(dashboard, /Escape/);
   assert.match(dashboard, /Ledige tider denne uge/);
   assert.match(dashboard, /UGE/);
   assert.match(dashboard, /selectDay/);

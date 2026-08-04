@@ -166,6 +166,15 @@ export function Dashboard() {
     return () => { active = false; };
   }, [flash, weekStart]);
 
+  useEffect(() => {
+    if (!modalOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setModalOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [modalOpen]);
+
   const changeWeek = (days: number) => {
     setWeekLoading(true);
     setWeekStart((current) => addDays(current, days));
@@ -285,7 +294,6 @@ export function Dashboard() {
       <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
         <div className="brand">
           <div className="brand-logo"><img src="/midtjysk-bilsyn-logo.png" alt="Midtjysk Bilsyn" /></div>
-          <div><strong>Midtjysk</strong><span>Bilsyn</span></div>
           <button className="mobile-close" aria-label="Luk menu" onClick={() => setMenuOpen(false)}><X size={20} /></button>
         </div>
         <nav aria-label="Primær navigation">
@@ -316,7 +324,7 @@ export function Dashboard() {
       <main>
         <header className="topbar">
           <button className="menu-button" aria-label="Åbn menu" onClick={() => setMenuOpen(true)}><Menu size={22} /></button>
-          <div className="location"><span>Afdeling</span><button>Herning <ChevronDown size={15} /></button></div>
+          <div className="location"><span>Ikast</span></div>
           <div className="top-actions">
             <button className="icon-button" aria-label="Søg" onClick={() => flash("Søgning bliver tilføjet i næste etape")}><Search size={19} /></button>
             <button className="icon-button notification" aria-label="Notifikationer" onClick={() => flash("Du har 2 nye driftsbeskeder")}><Bell size={19} /><i /></button>
