@@ -108,7 +108,6 @@ export function Dashboard() {
   const visibleBookings = filter === "alle" ? bookings : bookings.filter((booking) => booking.customerType === filter);
   const privateCount = bookings.filter((booking) => booking.customerType === "private").length;
   const businessCount = bookings.length - privateCount;
-  const completedCount = bookings.filter((booking) => booking.status === "completed").length;
   const matchingBusinesses = customerOptions.filter((customer) => customer.customerType === "business" && `${customer.name} ${customer.vehicles.map((vehicle) => vehicle.plate).join(" ")}`.toLowerCase().includes(businessQuery.toLowerCase())).slice(0, 6);
   const timeChoices = [...new Set([...(selectedBooking && form.time ? [form.time] : []), ...modalSlots])];
 
@@ -359,8 +358,6 @@ export function Dashboard() {
 
           <section className="day-summary" aria-label="Dagens nøgletal">
             <div><span>Bookinger i dag</span><strong>{bookings.length}</strong></div>
-            <div><span className="summary-icon private"><UserRound size={15} /></span><p><strong>{privateCount}</strong><small>Private</small></p></div>
-            <div><span className="summary-icon business"><Building2 size={15} /></span><p><strong>{businessCount}</strong><small>Erhverv</small></p></div>
             <div><span className="summary-icon available"><Clock3 size={15} /></span><p><strong>{availableSlots.length}</strong><small>Ledige i dag</small></p></div>
           </section>
 
@@ -401,16 +398,9 @@ export function Dashboard() {
               <section className="available-card">
                 <div className="aside-title"><span className="aside-icon"><Clock3 size={18} /></span><div><h2>Ledige tider</h2><p>I dag</p></div></div>
                 <div className="available-times">
-                  {availableSlots.slice(0, 4).map((time) => <button key={time} onClick={() => openCreate(time)}>{time} <Plus size={15} /></button>)}
+                  {availableSlots.map((time) => <button key={time} onClick={() => openCreate(time)}>{time} <Plus size={15} /></button>)}
                   {availableSlots.length === 0 && <p className="no-slots">Ingen ledige tider</p>}
                 </div>
-                <button className="secondary-wide" onClick={() => flash("Alle ledige tider vises i næste etape")}>Se alle ledige tider</button>
-              </section>
-
-              <section className="progress-card">
-                <div className="aside-title"><span className="aside-icon green"><Check size={18} /></span><div><h2>Dagens fremdrift</h2><p>{completedCount} af {bookings.length} gennemført</p></div></div>
-                <div className="progress-track"><span style={{ width: `${bookings.length ? Math.round(completedCount / bookings.length * 100) : 0}%` }} /></div>
-                <div className="progress-legend"><span><i /> {completedCount} færdige</span><span><i /> {bookings.length - completedCount} tilbage</span></div>
               </section>
             </aside>
           </div>
