@@ -26,7 +26,7 @@ export function SmsSettingsView({ onNotify }: Props) {
         <div className="settings-time-grid"><label className="smart-field">Ingen SMS fra<input type="time" value={settings.quietStart} onChange={(event) => update("quietStart", event.target.value)} /></label><label className="smart-field">Ingen SMS til<input type="time" value={settings.quietEnd} onChange={(event) => update("quietEnd", event.target.value)} /></label></div>
       </article>
     </section>
-    <section className="settings-note"><ShieldCheck size={18} /><div><strong>Sikker standard</strong><p>API-nøgler og adgang til GatewayAPI håndteres senere på serveren. De gemmes aldrig i browseren.</p><small>Lokal SMS-kø: {queueTotal ?? "…"} poster</small></div></section>
+    <section className="settings-note"><ShieldCheck size={18} /><div><strong>Sikker standard</strong><p>API-nøgler og adgang til GatewayAPI håndteres kun på serveren. De gemmes aldrig i browseren.</p><small>Lokal SMS-kø: {queueTotal ?? "…"} poster</small></div></section>
     <div className="settings-actions"><button className="primary-button" onClick={save}><Check size={16} /> Gem indstillinger</button></div>
   </div>;
 }

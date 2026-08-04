@@ -478,7 +478,7 @@ export function Dashboard() {
               </section>
             </div>
             <section className="sms-panel" aria-label="SMS til kunden">
-              <div className="sms-panel-heading"><div><span className="sms-label">SMS</span><div><strong>Send besked til kunden</strong><small>GatewayAPI klargjort — afsendelse aktiveres senere</small></div></div><span className="sms-status">Ikke aktiveret</span></div>
+              <div className="sms-panel-heading"><div><span className="sms-label">SMS</span><div><strong>Send besked til kunden</strong><small>GatewayAPI er klargjort, men ikke aktiveret</small></div></div><span className="sms-status">Ikke aktiveret</span></div>
               <div className="sms-controls"><label className="smart-field">Telefonnummer<input value={smsPhone} onChange={(event) => setSmsPhone(event.target.value)} placeholder="+45 20 12 34 56" /></label><label className="smart-field">Skabelon<select value={smsTemplate} onChange={(event) => setSmsTemplate(event.target.value as SmsTemplate)}>{Object.entries(smsTemplates).map(([key, template]) => <option key={key} value={key}>{template.label}</option>)}</select></label></div>
               <div className="sms-preview"><span>Forhåndsvisning</span><p>{smsTemplates[smsTemplate].text}</p><small>{smsTemplates[smsTemplate].text.length}/1600 tegn</small></div>
               <button className="sms-send" disabled type="button" onClick={() => flash("GatewayAPI er ikke aktiveret endnu")}>Send SMS</button>
