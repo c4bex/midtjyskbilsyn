@@ -27,7 +27,12 @@ export async function POST(request: Request) {
   const actor = await authorizeBookingRequest(request);
   if (!actor) return unauthorizedResponse();
   await ensureBookingDatabase();
-  const body = await request.json() as { type?: "absence" | "work_rule"; employeeId?: string; kind?: string; dateFrom?: string; dateTo?: string; note?: string; weekday?: number; startsAt?: string; endsAt?: string; working?: boolean };
+  const body = await request.json() as { type?: "absence" | "work_rule" | "employee_update"; employeeId?: string; displayName?: string; role?: string; active?: boolean; kind?: string; dateFrom?: string; dateTo?: string; note?: string; weekday?: number; startsAt?: string; endsAt?: string; working?: boolean };
+  if (body.type === "employee_update") {
+    if (!body.employeeId || !body.displayName?.trim() || !body.role?.trim()) return Response.json({ error: "Navn og rolle skal udfyldes" }, { status: 400 });
+    await getD1().prepare("UPDATE employees SET display_name = ?, role = ?, active = ?, updated_at = ? WHERE id = ? AND station_id = ?").bind(body.displayName.trim(), body.role.trim(), body.active === false ? 0 : 1, Date.now(), body.employeeId, bookingStationId).run();
+    return Response.json({ ok: true, actor: actor.displayName });
+  }
   if (body.type === "work_rule") {
     if (!body.employeeId || !body.weekday || body.weekday < 1 || body.weekday > 5 || (body.working && (!/^\d{2}:\d{2}$/.test(body.startsAt ?? "") || !/^\d{2}:\d{2}$/.test(body.endsAt ?? "")))) return Response.json({ error: "Ugyldig arbejdstidsregel" }, { status: 400 });
     const now = Date.now();
