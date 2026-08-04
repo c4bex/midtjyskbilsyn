@@ -336,11 +336,11 @@ export function Dashboard() {
           {activeView === "customers" ? <CustomersView onNotify={flash} /> : activeView === "availability" ? <AvailabilityView onNotify={flash} /> : <>
           <section className="page-heading">
             <div>
-            <p className="eyebrow">{dayNames[new Date(`${selectedDate}T12:00:00Z`).getUTCDay() === 0 ? 6 : new Date(`${selectedDate}T12:00:00Z`).getUTCDay() - 1]} · {dayNumber(selectedDate)}. {monthName(selectedDate)} 2026</p>
+              <p className="eyebrow">{dayNames[new Date(`${selectedDate}T12:00:00Z`).getUTCDay() === 0 ? 6 : new Date(`${selectedDate}T12:00:00Z`).getUTCDay() - 1]} · {dayNumber(selectedDate)}. {monthName(selectedDate)} 2026</p>
               <h1>Dagens bookinger</h1>
               <p>Hurtigt overblik over hvem og hvad der kommer i dag.</p>
             </div>
-            <button className="primary-button" onClick={() => openCreate()}><Plus size={18} /> Ny booking</button>
+            <div className="heading-actions"><div className="heading-stats"><span><strong>{bookings.length}</strong> bookinger</span><span><strong>{availableSlots.length}</strong> ledige</span></div><button className="primary-button" onClick={() => openCreate()}><Plus size={18} /> Ny booking</button></div>
           </section>
 
           <section className="week-capacity" aria-label={`Kapacitet for uge ${weekNumber}`}>
@@ -362,11 +362,6 @@ export function Dashboard() {
               })}
             </div>
             <div className="week-capacity-foot"><span><i className="green-dot" /> Klik på en grøn dag for at booke</span><span><i className="gray-dot" /> Lukket</span></div>
-          </section>
-
-          <section className="day-summary" aria-label="Dagens nøgletal">
-            <div><span>Bookinger {selectedDate === "2026-08-04" ? "i dag" : `den ${dayNumber(selectedDate)}. ${monthName(selectedDate)}`}</span><strong>{bookings.length}</strong></div>
-            <div><span className="summary-icon available"><Clock3 size={15} /></span><p><strong>{availableSlots.length}</strong><small>Ledige tider</small></p></div>
           </section>
 
           <div className="day-layout">
