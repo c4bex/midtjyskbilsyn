@@ -1,4 +1,4 @@
-export type AdapterName = "synsprogram" | "dinero" | "motorstyrelsen" | "arvo";
+export type AdapterName = "synsprogram" | "dinero" | "motorstyrelsen" | "gatewayapi" | "arvo";
 
 export type IntegrationCommand<TPayload> = {
   idempotencyKey: string;

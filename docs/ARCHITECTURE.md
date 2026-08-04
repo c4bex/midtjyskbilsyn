@@ -6,6 +6,8 @@ Systemet er et selvstændigt TypeScript-projekt med React/Next-kompatibel bruger
 
 Bookingdelen har nu sin egen D1-binding (`DB`) og et kontrolleret, fiktivt startdatasæt. Opret, redigér og aflys gemmes persistent lokalt og skriver audit-hændelser med aktør-id. Lokal udvikling tillades kun på loopback; en senere hostet API kræver platformens autentificerede brugerheaders og sitet skal samtidig have en privat workspace-adgangspolitik. Der foretages fortsat ingen eksterne kald.
 
+SMS forberedes som en separat GatewayAPI-adapter med faste skabeloner til bekræftelse, påmindelse, ændring og aflysning. Adapteren validerer telefonnummer, afsender, tekstlængde, idempotensnøgle og korrelations-id, men er deaktiveret indtil GatewayAPI-konto, afsender-id, testdata og en aktiveringsplan er dokumenteret.
+
 Forsidens ugekapacitet beregnes server-side ud fra åbningstider, pauser, lukkedage og aktive bookinger. API'et returnerer ugenummer og konkrete ledige tider pr. dag; et klik på en ledig dag åbner bookingflowet med dato og første ledige tid forudfyldt.
 
 Kundeoversigten læser kunder, køretøjer og samlet synshistorik fra de normaliserede kernetabeller. Åbningstidsmodulet vedligeholder ugentlige åbningstider, pauser, faste lukkedage samt datobaseret ferie/helligdage. Bookingmotoren læser de samme regler, så ændringer påvirker ledige tider uden kopieret konfiguration.

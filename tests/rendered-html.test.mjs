@@ -57,8 +57,11 @@ test("integrationsadaptere er deaktiverede som standard", async () => {
   const { dineroAdapter } = await import("../lib/integrations/adapters/dinero.ts");
   const { synsprogramAdapter } = await import("../lib/integrations/adapters/synsprogram.ts");
   const { dmrAdapter } = await import("../lib/integrations/adapters/dmr.ts");
+  const { gatewayApiAdapter } = await import("../lib/integrations/adapters/gatewayapi.ts");
   assert.equal(dineroAdapter.enabled, false);
   assert.equal(synsprogramAdapter.enabled, false);
   assert.equal(dmrAdapter.enabled, false);
+  assert.equal(gatewayApiAdapter.enabled, false);
   await assert.rejects(() => dineroAdapter.execute({ idempotencyKey: "invoice:demo-1", correlationId: "test-1", payload: { invoiceId: "demo-1", bookingId: "booking-1", amountOere: 59500, currency: "DKK" } }), /ikke aktiveret/i);
+  await assert.rejects(() => gatewayApiAdapter.execute({ idempotencyKey: "sms:demo-1", correlationId: "test-1", payload: { recipient: "+4520123456", message: "Test", sender: "MB Bilsyn" } }), /ikke aktiveret/i);
 });
