@@ -10,6 +10,8 @@ SMS forberedes som en separat GatewayAPI-adapter med faste skabeloner til bekræ
 
 Bookingpolitikken er: private kunder med telefonnummer får bekræftelse med det samme; en reminder planlægges kun ved en booking på en senere kalenderdag. Samme dags booking giver ingen reminder, så kunden ikke får en overflødig besked kort før synet.
 
+Aktivering kræver tre serverkonfigurationer uden for Git: `GATEWAYAPI_TOKEN`, `GATEWAYAPI_SENDER` og `SMS_PHONE_ENCRYPTION_KEY`. Token og krypteringsnøgle må aldrig ligge i frontend, `.env` i Git eller chat. Først når de er sat i den lokale/serverbaserede secrets manager, kan en afgrænset testudsendelse gennemføres.
+
 Forsidens ugekapacitet beregnes server-side ud fra åbningstider, pauser, lukkedage og aktive bookinger. API'et returnerer ugenummer og konkrete ledige tider pr. dag; et klik på en ledig dag åbner bookingflowet med dato og første ledige tid forudfyldt.
 
 Kundeoversigten læser kunder, køretøjer og samlet synshistorik fra de normaliserede kernetabeller. Åbningstidsmodulet vedligeholder ugentlige åbningstider, pauser, faste lukkedage samt datobaseret ferie/helligdage. Bookingmotoren læser de samme regler, så ændringer påvirker ledige tider uden kopieret konfiguration.
