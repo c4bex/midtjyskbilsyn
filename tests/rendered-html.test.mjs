@@ -85,6 +85,16 @@ test("importvalidering finder dubletter uden at skrive data", async () => {
   assert.equal(result.issues[0].code, "duplicate_source");
 });
 
+test("medarbejderdata har separat fraværstabel og API", async () => {
+  const [bootstrap, route] = await Promise.all([
+    readFile(new URL("../db/bootstrap.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/employees/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(bootstrap, /CREATE TABLE IF NOT EXISTS employee_absences/);
+  assert.match(route, /employee_absences/);
+  assert.match(route, /dateFrom/);
+});
+
 test("integrationsadaptere er deaktiverede som standard", async () => {
   const { dineroAdapter } = await import("../lib/integrations/adapters/dinero.ts");
   const { synsprogramAdapter } = await import("../lib/integrations/adapters/synsprogram.ts");

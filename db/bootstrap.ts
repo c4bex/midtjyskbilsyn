@@ -113,6 +113,27 @@ const schemaStatements = [
     updated_at INTEGER NOT NULL
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS uidx_invoice_drafts_source ON invoice_drafts(source_reference)`,
+  `CREATE TABLE IF NOT EXISTS employees (
+    id TEXT PRIMARY KEY NOT NULL,
+    station_id TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    email_normalized TEXT NOT NULL,
+    role TEXT NOT NULL,
+    active INTEGER DEFAULT 1 NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS employee_absences (
+    id TEXT PRIMARY KEY NOT NULL,
+    employee_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    date_from TEXT NOT NULL,
+    date_to TEXT NOT NULL,
+    note TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_employee_absences_dates ON employee_absences(date_from, date_to)`,
 ];
 
 const demoBookings = [
