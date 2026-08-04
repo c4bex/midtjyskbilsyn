@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, FileText, Pencil, ShieldCheck } from "lucide-react";
+import { Check, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
 type Invoice = { id: string; customer: string; period: string; description: string; quantity: number; price: number; status: "Klargøres" | "Klar til Dinero"; registration: string };
