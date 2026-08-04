@@ -73,6 +73,17 @@ test("SMS-køen har idempotens pr. booking og krypteret modtagerfelt", async () 
   assert.match(bootstrap, /recipient_encrypted TEXT NOT NULL/);
 });
 
+test("importvalidering finder dubletter uden at skrive data", async () => {
+  const { validateImport } = await import("../lib/import-validation.ts");
+  const result = validateImport([
+    { sourceReference: "syn:1", customer: "Test ApS", registration: "AB12345", date: "2026-08-04", amountOere: 38000 },
+    { sourceReference: "syn:1", customer: "Test ApS", registration: "AB12345", date: "2026-08-04", amountOere: 38000 },
+  ]);
+  assert.equal(result.valid, 1);
+  assert.equal(result.writes, 0);
+  assert.equal(result.issues[0].code, "duplicate_source");
+});
+
 test("integrationsadaptere er deaktiverede som standard", async () => {
   const { dineroAdapter } = await import("../lib/integrations/adapters/dinero.ts");
   const { synsprogramAdapter } = await import("../lib/integrations/adapters/synsprogram.ts");
