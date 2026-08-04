@@ -28,6 +28,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AvailabilityView } from "./availability-view";
 import { CustomersView } from "./customers-view";
 import { SmsSettingsView } from "./sms-settings-view";
+import { InvoiceView } from "./invoice-view";
 
 type CustomerType = "private" | "business";
 type BookingStatus = "confirmed" | "arrived" | "awaiting_confirmation" | "completed";
@@ -85,7 +86,7 @@ const emptyForm = { date: "2026-08-04", time: "11:20", customer: "", customerTyp
 
 export function Dashboard() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [activeView, setActiveView] = useState<"bookings" | "customers" | "availability" | "sms">("bookings");
+  const [activeView, setActiveView] = useState<"bookings" | "customers" | "availability" | "sms" | "invoices">("bookings");
   const [filter, setFilter] = useState<"alle" | CustomerType>("alle");
   const [modalOpen, setModalOpen] = useState(false);
   const [notice, setNotice] = useState("");
@@ -129,8 +130,7 @@ export function Dashboard() {
   }, []);
 
   const navigate = (view: string) => {
-    if (view === "invoices") return flash("Fakturering åbnes i en kommende etape");
-    setActiveView(view as "bookings" | "customers" | "availability" | "sms");
+    setActiveView(view as "bookings" | "customers" | "availability" | "sms" | "invoices");
     setMenuOpen(false);
     setModalOpen(false);
   };
@@ -349,7 +349,7 @@ export function Dashboard() {
         </header>
 
         <div className="workspace">
-          {activeView === "customers" ? <CustomersView onNotify={flash} /> : activeView === "availability" ? <AvailabilityView onNotify={flash} /> : activeView === "sms" ? <SmsSettingsView onNotify={flash} /> : <>
+          {activeView === "customers" ? <CustomersView onNotify={flash} /> : activeView === "availability" ? <AvailabilityView onNotify={flash} /> : activeView === "sms" ? <SmsSettingsView onNotify={flash} /> : activeView === "invoices" ? <InvoiceView onNotify={flash} /> : <>
           <section className="page-heading">
             <div>
               <p className="eyebrow">{dayNames[new Date(`${selectedDate}T12:00:00Z`).getUTCDay() === 0 ? 6 : new Date(`${selectedDate}T12:00:00Z`).getUTCDay() - 1]} · {dayNumber(selectedDate)}. {monthName(selectedDate)} 2026</p>
