@@ -2,6 +2,8 @@
 
 Selvstændigt greenfield-system til booking og daglig drift hos Midtjysk Bilsyn. Bookingoversigt, kunde-/køretøjshistorik og administration af åbningstider bruger en separat lokal D1-database med fiktive data. Eksterne integrationer er fortsat deaktiverede.
 
+Bookingformularen viser kun beregnede ledige tider, har en søgbar erhvervskundevælger og slår nummerplader op i egne data. En separat DMR/Motorstyrelsen-adapter er forberedt, men hard-disabled indtil dokumentation og testdata foreligger.
+
 ## Lokal start
 
 Kræver Node.js 22.13 eller nyere.

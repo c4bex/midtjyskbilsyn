@@ -5,6 +5,7 @@ import {
   Building2,
   CalendarDays,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -15,6 +16,7 @@ import {
   MoreHorizontal,
   Plus,
   Search,
+  ScanSearch,
   Settings,
   ShieldCheck,
   UserRound,
@@ -39,6 +41,9 @@ type Booking = {
   inspection: string;
   status: BookingStatus;
 };
+
+type CustomerOption = { id: string; name: string; customerType: CustomerType; vehicles: Array<{ id: string; plate: string; vehicle: string }> };
+type VehicleLookup = { found: boolean; source: string; vehicle?: { registration: string; make: string | null; model: string | null }; customer?: { name: string; customerType: CustomerType }; lastInspectionDate?: string | null; inspectionDueDate?: string | null; dmr: { enabled: boolean; status: string } };
 
 const nav = [
   { id: "bookings", label: "Dagens bookinger", icon: CalendarDays },
@@ -85,14 +90,22 @@ export function Dashboard() {
   const [notice, setNotice] = useState("");
   const [bookings, setBookings] = useState(initialBookings);
   const [availableSlots, setAvailableSlots] = useState(["11:20", "14:20"]);
+  const [modalSlots, setModalSlots] = useState(["11:20", "14:20"]);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [customerOptions, setCustomerOptions] = useState<CustomerOption[]>([]);
+  const [businessQuery, setBusinessQuery] = useState("");
+  const [vehicleLookup, setVehicleLookup] = useState<VehicleLookup | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [slotsLoading, setSlotsLoading] = useState(false);
 
   const visibleBookings = filter === "alle" ? bookings : bookings.filter((booking) => booking.customerType === filter);
   const privateCount = bookings.filter((booking) => booking.customerType === "private").length;
   const businessCount = bookings.length - privateCount;
   const completedCount = bookings.filter((booking) => booking.status === "completed").length;
+  const matchingBusinesses = customerOptions.filter((customer) => customer.customerType === "business" && `${customer.name} ${customer.vehicles.map((vehicle) => vehicle.plate).join(" ")}`.toLowerCase().includes(businessQuery.toLowerCase())).slice(0, 6);
+  const timeChoices = [...new Set([...(selectedBooking && form.time ? [form.time] : []), ...modalSlots])];
 
   const flash = useCallback((message: string) => {
     setNotice(message);
@@ -138,16 +151,70 @@ export function Dashboard() {
     return () => { active = false; };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    fetch("/api/customers", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() as Promise<{ customers: CustomerOption[] }> : Promise.reject())
+      .then((data) => { if (active) setCustomerOptions(data.customers); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  const loadSlots = async (date: string) => {
+    setSlotsLoading(true);
+    try {
+      const response = await fetch(`/api/bookings?date=${encodeURIComponent(date)}`, { cache: "no-store" });
+      const data = await response.json() as { availableSlots?: string[] };
+      if (response.ok) setModalSlots(data.availableSlots ?? []);
+    } finally { setSlotsLoading(false); }
+  };
+
+  const lookupPlate = async (plate: string) => {
+    const normalized = plate.toUpperCase().replace(/[^A-ZÆØÅ0-9]/g, "");
+    if (normalized.length < 5) return;
+    setLookupLoading(true);
+    try {
+      const response = await fetch(`/api/vehicles/lookup?plate=${encodeURIComponent(plate)}`, { cache: "no-store" });
+      const data = await response.json() as VehicleLookup;
+      if (!response.ok) throw new Error();
+      setVehicleLookup(data);
+      if (data.found && data.vehicle) {
+        setForm((current) => ({
+          ...current,
+          plate: data.vehicle?.registration ?? current.plate,
+          vehicle: [data.vehicle?.make, data.vehicle?.model].filter(Boolean).join(" "),
+          customer: current.customer || data.customer?.name || "",
+          customerType: current.customer ? current.customerType : data.customer?.customerType ?? current.customerType,
+        }));
+      }
+    } catch { setVehicleLookup(null); flash("Nummerpladen kunne ikke slås op"); }
+    finally { setLookupLoading(false); }
+  };
+
   const openCreate = (time = availableSlots[0] ?? "08:00") => {
     setSelectedBooking(null);
     setForm({ ...emptyForm, time });
+    setModalSlots(availableSlots);
+    setBusinessQuery("");
+    setVehicleLookup(null);
     setModalOpen(true);
   };
 
   const openEdit = (booking: Booking) => {
     setSelectedBooking(booking);
     setForm({ date: booking.date, time: booking.time, customer: booking.customer, customerType: booking.customerType, plate: booking.plate, vehicle: booking.vehicle, inspection: booking.inspection });
+    setModalSlots(availableSlots);
+    setBusinessQuery(booking.customerType === "business" ? booking.customer : "");
+    setVehicleLookup(null);
     setModalOpen(true);
+  };
+
+  const chooseBusiness = (customer: CustomerOption) => {
+    const vehicle = customer.vehicles[0];
+    setBusinessQuery(customer.name);
+    setForm((current) => ({ ...current, customer: customer.name, customerType: "business", plate: vehicle?.plate ?? "", vehicle: vehicle?.vehicle ?? "" }));
+    setVehicleLookup(null);
+    if (vehicle?.plate) void lookupPlate(vehicle.plate);
   };
 
   const saveBooking = async () => {
@@ -319,16 +386,50 @@ export function Dashboard() {
 
       {modalOpen && (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setModalOpen(false)}>
-          <section className="modal" role="dialog" aria-modal="true" aria-labelledby="new-booking-title" onMouseDown={(event) => event.stopPropagation()}>
+          <section className="modal smart-booking-modal" role="dialog" aria-modal="true" aria-labelledby="new-booking-title" onMouseDown={(event) => event.stopPropagation()}>
             <div className="modal-heading"><div><span>{selectedBooking ? "Rediger aftale" : "Ny aftale"}</span><h2 id="new-booking-title">{selectedBooking ? `${selectedBooking.time} · ${selectedBooking.customer}` : "Opret booking"}</h2></div><button aria-label="Luk" onClick={() => setModalOpen(false)}><X size={20} /></button></div>
-            <div className="form-grid">
-              <label className="full">Kundetype<select value={form.customerType} onChange={(event) => setForm({ ...form, customerType: event.target.value as CustomerType })}><option value="private">Privatkunde</option><option value="business">Erhvervskunde</option></select></label>
-              <label className="full">Kunde<input value={form.customer} onChange={(event) => setForm({ ...form, customer: event.target.value })} placeholder="Navn eller virksomhed" /></label>
-              <label>Dato<input type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></label>
-              <label>Tid<input type="time" step="1200" value={form.time} onChange={(event) => setForm({ ...form, time: event.target.value })} /></label>
-              <label>Registreringsnummer<input value={form.plate} onChange={(event) => setForm({ ...form, plate: event.target.value })} placeholder="AB 12 345" /></label>
-              <label>Bil<input value={form.vehicle} onChange={(event) => setForm({ ...form, vehicle: event.target.value })} placeholder="F.eks. VW Golf" /></label>
-              <label className="full">Synstype<select value={form.inspection} onChange={(event) => setForm({ ...form, inspection: event.target.value })}><option>Periodisk syn</option><option>Omsyn</option><option>Varebilssyn</option><option>Motorcykelsyn</option></select></label>
+            <div className="booking-steps">
+              <section className="booking-step">
+                <div className="step-title"><em>1</em><div><strong>Vælg kunde</strong><span>Privat eller en af dine erhvervskunder</span></div></div>
+                <div className="type-choice">
+                  <button className={form.customerType === "private" ? "selected" : ""} onClick={() => { setForm({ ...form, customerType: "private", customer: "" }); setBusinessQuery(""); }}><UserRound size={16} /><span><strong>Privatkunde</strong><small>Ny eller eksisterende</small></span></button>
+                  <button className={form.customerType === "business" ? "selected business" : "business"} onClick={() => setForm({ ...form, customerType: "business", customer: "" })}><Building2 size={16} /><span><strong>Erhvervskunde</strong><small>Vælg fra kundelisten</small></span></button>
+                </div>
+                {form.customerType === "private" ? (
+                  <label className="smart-field">Kundens navn<input value={form.customer} onChange={(event) => setForm({ ...form, customer: event.target.value })} placeholder="Skriv navn" /></label>
+                ) : (
+                  <div className="business-select">
+                    <label className="smart-field">Find erhvervskunde<span className="field-with-icon"><Search size={16} /><input value={businessQuery} onChange={(event) => { setBusinessQuery(event.target.value); setForm({ ...form, customer: "" }); }} placeholder="Søg virksomhed eller nummerplade" /></span></label>
+                    <div className="business-options">
+                      {matchingBusinesses.map((customer) => <button className={form.customer === customer.name ? "selected" : ""} key={customer.id} onClick={() => chooseBusiness(customer)}><span className="company-avatar">{customer.name.slice(0, 2).toUpperCase()}</span><span><strong>{customer.name}</strong><small>{customer.vehicles.map((vehicle) => `${vehicle.plate} · ${vehicle.vehicle}`).join(" · ")}</small></span>{form.customer === customer.name && <CheckCircle2 size={17} />}</button>)}
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              <section className="booking-step">
+                <div className="step-title"><em>2</em><div><strong>Køretøj</strong><span>Nummerpladen udfylder bilen automatisk</span></div></div>
+                <div className="plate-grid">
+                  <label className="smart-field">Registreringsnummer<span className="field-with-button"><input value={form.plate} onChange={(event) => { const plate = event.target.value.toUpperCase(); setForm({ ...form, plate }); setVehicleLookup(null); if (plate.replace(/[^A-ZÆØÅ0-9]/g, "").length === 7) void lookupPlate(plate); }} onBlur={() => void lookupPlate(form.plate)} placeholder="AB 12 345" /><button aria-label="Slå nummerplade op" onClick={() => void lookupPlate(form.plate)}><ScanSearch size={17} /></button></span></label>
+                  <label className="smart-field">Mærke og model<input value={form.vehicle} onChange={(event) => setForm({ ...form, vehicle: event.target.value })} placeholder="Udfyldes automatisk" /></label>
+                </div>
+                {lookupLoading && <div className="lookup-card loading"><span className="lookup-spinner" /><span><strong>Slår nummerpladen op…</strong><small>Først i kundearkivet, senere også i DMR</small></span></div>}
+                {!lookupLoading && vehicleLookup?.found && <div className="lookup-card found"><CheckCircle2 size={18} /><span><strong>{vehicleLookup.vehicle?.make} {vehicleLookup.vehicle?.model} fundet</strong><small>Seneste syn: {vehicleLookup.lastInspectionDate ?? "Ikke registreret"} · Næste synsdato hentes fra DMR ved tilkobling</small></span><em>Egne data</em></div>}
+                {!lookupLoading && vehicleLookup && !vehicleLookup.found && <div className="lookup-card"><ScanSearch size={18} /><span><strong>Ikke fundet i egne data</strong><small>Mærke, model og synsdato kan hentes automatisk, når DMR-adapteren aktiveres.</small></span><em>DMR ikke tilkoblet</em></div>}
+              </section>
+
+              <section className="booking-step time-step">
+                <div className="step-title"><em>3</em><div><strong>Vælg en ledig tid</strong><span>Kun tider der kan bookes vises</span></div></div>
+                <div className="date-and-type">
+                  <label className="smart-field">Dato<input type="date" value={form.date} onChange={(event) => { const date = event.target.value; setForm({ ...form, date, time: "" }); void loadSlots(date); }} /></label>
+                  <label className="smart-field">Synstype<select value={form.inspection} onChange={(event) => setForm({ ...form, inspection: event.target.value })}><option>Periodisk syn</option><option>Omsyn</option><option>Varebilssyn</option><option>Motorcykelsyn</option></select></label>
+                </div>
+                <div className="slot-heading"><span>{slotsLoading ? "Henter ledige tider…" : `${modalSlots.length} ledige tider`}</span><small>20 min. pr. booking</small></div>
+                <div className="booking-slots">
+                  {timeChoices.map((time) => <button className={form.time === time ? "selected" : ""} key={time} onClick={() => setForm({ ...form, time })}><Clock3 size={14} />{time}{form.time === time && <Check size={13} />}</button>)}
+                  {!slotsLoading && timeChoices.length === 0 && <p>Ingen ledige tider denne dag.</p>}
+                </div>
+              </section>
             </div>
             <div className="modal-actions">
               {selectedBooking && <button className="danger-button" disabled={saving} onClick={() => void cancelBooking()}>Aflys booking</button>}

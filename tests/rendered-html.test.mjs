@@ -40,7 +40,9 @@ test("danske bookingtider håndterer både sommer- og vintertid", async () => {
 test("integrationsadaptere er deaktiverede som standard", async () => {
   const { dineroAdapter } = await import("../lib/integrations/adapters/dinero.ts");
   const { synsprogramAdapter } = await import("../lib/integrations/adapters/synsprogram.ts");
+  const { dmrAdapter } = await import("../lib/integrations/adapters/dmr.ts");
   assert.equal(dineroAdapter.enabled, false);
   assert.equal(synsprogramAdapter.enabled, false);
+  assert.equal(dmrAdapter.enabled, false);
   await assert.rejects(() => dineroAdapter.execute({ idempotencyKey: "invoice:demo-1", correlationId: "test-1", payload: { invoiceId: "demo-1", bookingId: "booking-1", amountOere: 59500, currency: "DKK" } }), /ikke aktiveret/i);
 });

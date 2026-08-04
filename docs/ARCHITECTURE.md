@@ -23,6 +23,8 @@ Alle udgående handlinger bliver først skrevet til `integration_jobs`. En unik 
 
 Adapters er nu hard-disabled og kan ikke kalde eksterne systemer. Aktivering kræver versionsfast dokumentation, testmiljø/testdata, kontrakttest, hemmeligheder i en secret store og en godkendt rollback-plan.
 
+Køretøjsopslaget søger først på normaliseret registreringsnummer i den lokale database og kan derfor udfylde mærke, model, kunde og seneste lokale syn uden eksterne kald. Et manglende lokalt resultat returnerer kun status `DMR ikke tilkoblet`; det udløser aldrig et skjult netværkskald. Senere kan DMR-adapteren levere de samme felter samt officiel næste synsdato gennem den eksisterende adaptergrænseflade.
+
 ## Persondata og adgang
 
 Der gemmes kun visningsnavn og nødvendige kontaktkanaler; telefon og e-mail er modelleret som krypterede felter. CPR-numre, fødselsdatoer og fritekst med følsomme oplysninger hører ikke hjemme i systemet. Roller håndhæves server-side efter princippet om mindst mulige rettigheder. Alle mutationer skal audit-logges. Hemmeligheder må kun ligge i miljøets secret store, aldrig i kode, databaseudtræk, logs eller chat.
