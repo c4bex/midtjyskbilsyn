@@ -55,6 +55,14 @@ test("danske bookingtider håndterer både sommer- og vintertid", async () => {
   assert.deepEqual(toDateAndTime(toTimestamp("2026-12-04", "11:20")), { date: "2026-12-04", time: "11:20" });
 });
 
+test("SMS-politikken bekræfter private straks og springer samme dags reminder over", async () => {
+  const { planBookingSms } = await import("../lib/sms-policy.ts");
+  const now = Date.parse("2026-08-04T08:00:00+02:00");
+  assert.deepEqual(planBookingSms({ customerType: "private", phone: "+4520123456", startsAt: Date.parse("2026-08-04T14:20:00+02:00"), now }), { confirmation: "immediate", reminder: "same_day_skipped" });
+  assert.deepEqual(planBookingSms({ customerType: "private", phone: "+4520123456", startsAt: Date.parse("2026-08-05T14:20:00+02:00"), now }), { confirmation: "immediate", reminder: "scheduled" });
+  assert.deepEqual(planBookingSms({ customerType: "business", phone: "+4520123456", startsAt: Date.parse("2026-08-05T14:20:00+02:00"), now }), { confirmation: "not_applicable", reminder: "not_applicable" });
+});
+
 test("integrationsadaptere er deaktiverede som standard", async () => {
   const { dineroAdapter } = await import("../lib/integrations/adapters/dinero.ts");
   const { synsprogramAdapter } = await import("../lib/integrations/adapters/synsprogram.ts");
