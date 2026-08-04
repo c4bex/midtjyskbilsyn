@@ -13,7 +13,7 @@ test("den danske dagsoversigt indeholder bookingflowet", async () => {
   assert.match(dashboard, /Dagens bookinger/);
   assert.match(dashboard, /Ledige tider denne uge/);
   assert.match(dashboard, /UGE/);
-  assert.match(dashboard, /openDayBooking/);
+  assert.match(dashboard, /selectDay/);
   assert.doesNotMatch(dashboard, /Dagens fremdrift/);
   assert.doesNotMatch(dashboard, /Se alle ledige tider/);
   assert.match(dashboard, /Filtrer efter kundetype/);

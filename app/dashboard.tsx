@@ -98,6 +98,7 @@ export function Dashboard() {
   const [lookupLoading, setLookupLoading] = useState(false);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [weekStart, setWeekStart] = useState("2026-08-03");
+  const [selectedDate, setSelectedDate] = useState("2026-08-04");
   const [weekNumber, setWeekNumber] = useState(32);
   const [weekDays, setWeekDays] = useState<WeekDay[]>([
     { date: "2026-08-03", weekday: 1, closed: false, totalSlots: 23, bookedSlots: 0, availableSlots: [] },
@@ -123,9 +124,9 @@ export function Dashboard() {
     setModalOpen(false);
   };
 
-  const reloadBookings = async () => {
+  const reloadBookings = async (date = selectedDate) => {
     try {
-      const response = await fetch("/api/bookings?date=2026-08-04", { cache: "no-store" });
+      const response = await fetch(`/api/bookings?date=${encodeURIComponent(date)}`, { cache: "no-store" });
       if (!response.ok) throw new Error("Kunne ikke hente bookinger");
       const data = await response.json() as { bookings: Booking[]; availableSlots: string[] };
       setBookings(data.bookings);
@@ -137,7 +138,7 @@ export function Dashboard() {
 
   useEffect(() => {
     let active = true;
-    fetch("/api/bookings?date=2026-08-04", { cache: "no-store" })
+    fetch(`/api/bookings?date=${encodeURIComponent(selectedDate)}`, { cache: "no-store" })
       .then((response) => {
         if (!response.ok) throw new Error("Kunne ikke hente bookinger");
         return response.json() as Promise<{ bookings: Booking[]; availableSlots: string[] }>;
@@ -153,7 +154,7 @@ export function Dashboard() {
         window.setTimeout(() => setNotice(""), 2600);
       });
     return () => { active = false; };
-  }, []);
+  }, [selectedDate]);
 
   useEffect(() => {
     let active = true;
@@ -210,7 +211,7 @@ export function Dashboard() {
     finally { setLookupLoading(false); }
   };
 
-  const openCreate = (time = availableSlots[0] ?? "08:00", date = "2026-08-04", slots = availableSlots) => {
+  const openCreate = (time = availableSlots[0] ?? "08:00", date = selectedDate, slots = availableSlots) => {
     setSelectedBooking(null);
     setForm({ ...emptyForm, date, time });
     setModalSlots(slots);
@@ -219,10 +220,9 @@ export function Dashboard() {
     setModalOpen(true);
   };
 
-  const openDayBooking = (day: WeekDay) => {
+  const selectDay = (day: WeekDay) => {
     if (day.closed) return flash(`${dayNames[day.weekday - 1]} er lukket`);
-    if (day.availableSlots.length === 0) return flash(`${dayNames[day.weekday - 1]} er fuldt booket`);
-    openCreate(day.availableSlots[0], day.date, day.availableSlots);
+    setSelectedDate(day.date);
   };
 
   const openEdit = (booking: Booking) => {
@@ -328,7 +328,7 @@ export function Dashboard() {
           {activeView === "customers" ? <CustomersView onNotify={flash} /> : activeView === "availability" ? <AvailabilityView onNotify={flash} /> : <>
           <section className="page-heading">
             <div>
-              <p className="eyebrow">Tirsdag · 4. august 2026</p>
+            <p className="eyebrow">{dayNames[new Date(`${selectedDate}T12:00:00Z`).getUTCDay() === 0 ? 6 : new Date(`${selectedDate}T12:00:00Z`).getUTCDay() - 1]} · {dayNumber(selectedDate)}. {monthName(selectedDate)} 2026</p>
               <h1>Dagens bookinger</h1>
               <p>Hurtigt overblik over hvem og hvad der kommer i dag.</p>
             </div>
@@ -346,7 +346,7 @@ export function Dashboard() {
                 const available = day.availableSlots.length;
                 const fullness = day.totalSlots ? Math.round(day.bookedSlots / day.totalSlots * 100) : 0;
                 const today = day.date === "2026-08-04";
-                return <button key={day.date} disabled={weekLoading} className={`${day.closed ? "closed" : available > 0 ? "available" : "full"} ${today ? "today" : ""}`} onClick={() => openDayBooking(day)}>
+                return <button key={day.date} disabled={weekLoading || day.closed} className={`${day.closed ? "closed" : available > 0 ? "available" : "full"} ${today ? "today" : ""} ${selectedDate === day.date ? "selected-day" : ""}`} onClick={() => selectDay(day)} aria-pressed={selectedDate === day.date}>
                   <span className="capacity-day-name">{dayNames[day.weekday - 1]}{today && <em>I dag</em>}</span>
                   <strong>{dayNumber(day.date)}</strong><small>{monthName(day.date)}</small>
                   {day.closed ? <span className="capacity-status">Lukket</span> : <><span className="capacity-status"><b>{available}</b> ledige</span><span className="capacity-bar"><i style={{ width: `${fullness}%` }} /></span></>}
@@ -357,14 +357,14 @@ export function Dashboard() {
           </section>
 
           <section className="day-summary" aria-label="Dagens nøgletal">
-            <div><span>Bookinger i dag</span><strong>{bookings.length}</strong></div>
-            <div><span className="summary-icon available"><Clock3 size={15} /></span><p><strong>{availableSlots.length}</strong><small>Ledige i dag</small></p></div>
+            <div><span>Bookinger {selectedDate === "2026-08-04" ? "i dag" : `den ${dayNumber(selectedDate)}. ${monthName(selectedDate)}`}</span><strong>{bookings.length}</strong></div>
+            <div><span className="summary-icon available"><Clock3 size={15} /></span><p><strong>{availableSlots.length}</strong><small>Ledige tider</small></p></div>
           </section>
 
           <div className="day-layout">
             <section className="booking-list-card">
               <div className="list-toolbar">
-                <div><h2>Tirsdag den 4. august</h2><span>Sorteret efter tidspunkt</span></div>
+                <div><h2>{dayNames[new Date(`${selectedDate}T12:00:00Z`).getUTCDay() === 0 ? 6 : new Date(`${selectedDate}T12:00:00Z`).getUTCDay() - 1]} den {dayNumber(selectedDate)}. {monthName(selectedDate)}</h2><span>Sorteret efter tidspunkt</span></div>
                 <div className="customer-filters" role="group" aria-label="Filtrer efter kundetype">
                   <button className={filter === "alle" ? "selected" : ""} onClick={() => setFilter("alle")}>Alle <span>{bookings.length}</span></button>
                   <button className={filter === "private" ? "selected" : ""} onClick={() => setFilter("private")}>Private <span>{privateCount}</span></button>
@@ -396,7 +396,7 @@ export function Dashboard() {
 
             <aside className="day-aside">
               <section className="available-card">
-                <div className="aside-title"><span className="aside-icon"><Clock3 size={18} /></span><div><h2>Ledige tider</h2><p>I dag</p></div></div>
+                <div className="aside-title"><span className="aside-icon"><Clock3 size={18} /></span><div><h2>Ledige tider</h2><p>{selectedDate === "2026-08-04" ? "I dag" : `${dayNumber(selectedDate)}. ${monthName(selectedDate)}`}</p></div></div>
                 <div className="available-times">
                   {availableSlots.map((time) => <button key={time} onClick={() => openCreate(time)}>{time} <Plus size={15} /></button>)}
                   {availableSlots.length === 0 && <p className="no-slots">Ingen ledige tider</p>}

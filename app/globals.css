@@ -177,4 +177,6 @@ main { grid-column: 2; min-width: 0; }
   .week-capacity { margin-inline: -16px; border-radius: 0; border-inline: 0; }.week-capacity-head { padding-inline: 12px; }.week-identity { width: 50px; flex-basis: 50px; }.week-capacity-head h2 { font-size: 12px; }.week-navigation button:nth-child(2) { display: none; }.week-capacity-foot { white-space: nowrap; overflow-x: auto; }
 }
 
+.capacity-days > button.selected-day { outline: 2px solid var(--blue); outline-offset: -2px; }
+
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
