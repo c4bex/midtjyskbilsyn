@@ -332,7 +332,7 @@ export function Dashboard() {
           <div className="status-line"><i /><span>Systemet kører normalt</span></div>
           <small>Senest kontrolleret 10:58</small>
         </div>
-        <button className="profile" onClick={() => flash("Profilmenu kommer i næste etape")}>
+        <button className="profile" aria-label="Profil">
           <span className="avatar">RM</span><span><strong>Rasmus M.</strong><small>Administrator</small></span><ChevronDown size={16} />
         </button>
       </aside>
@@ -344,7 +344,7 @@ export function Dashboard() {
           <button className="menu-button" aria-label="Åbn menu" onClick={() => setMenuOpen(true)}><Menu size={22} /></button>
           <div className="location"><span>Ikast</span></div>
           <div className="top-actions">
-            <button className="icon-button" aria-label="Søg" onClick={() => flash("Søgning bliver tilføjet i næste etape")}><Search size={19} /></button>
+            <button className="icon-button" aria-label="Søg"><Search size={19} /></button>
             <button className="icon-button notification" aria-label="Notifikationer" onClick={() => flash("Du har 2 nye driftsbeskeder")}><Bell size={19} /><i /></button>
           </div>
         </header>
