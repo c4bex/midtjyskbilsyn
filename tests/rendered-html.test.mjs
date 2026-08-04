@@ -23,6 +23,8 @@ test("den danske dagsoversigt indeholder bookingflowet", async () => {
   assert.match(dashboard, /Private/);
   assert.match(dashboard, /Erhverv/);
   assert.match(dashboard, /Aflys booking/);
+  assert.match(dashboard, /Send besked til kunden/);
+  assert.match(dashboard, /GatewayAPI klargjort/);
   assert.match(dashboard, /\/api\/bookings/);
   assert.match(dashboard, /CustomersView/);
   assert.match(dashboard, /AvailabilityView/);

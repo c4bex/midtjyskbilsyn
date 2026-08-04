@@ -45,6 +45,7 @@ type Booking = {
 type CustomerOption = { id: string; name: string; customerType: CustomerType; vehicles: Array<{ id: string; plate: string; vehicle: string }> };
 type VehicleLookup = { found: boolean; source: string; vehicle?: { registration: string; make: string | null; model: string | null }; customer?: { name: string; customerType: CustomerType }; lastInspectionDate?: string | null; inspectionDueDate?: string | null; dmr: { enabled: boolean; status: string } };
 type WeekDay = { date: string; weekday: number; closed: boolean; totalSlots: number; bookedSlots: number; availableSlots: string[] };
+type SmsTemplate = "booking_confirmation" | "booking_reminder" | "booking_changed" | "booking_cancelled";
 
 const nav = [
   { id: "bookings", label: "Dagens bookinger", icon: CalendarDays },
@@ -97,6 +98,8 @@ export function Dashboard() {
   const [vehicleLookup, setVehicleLookup] = useState<VehicleLookup | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [slotsLoading, setSlotsLoading] = useState(false);
+  const [smsTemplate, setSmsTemplate] = useState<SmsTemplate>("booking_confirmation");
+  const [smsPhone, setSmsPhone] = useState("");
   const [weekStart, setWeekStart] = useState("2026-08-03");
   const [selectedDate, setSelectedDate] = useState("2026-08-04");
   const [weekNumber, setWeekNumber] = useState(32);
@@ -111,6 +114,12 @@ export function Dashboard() {
   const businessCount = bookings.length - privateCount;
   const matchingBusinesses = customerOptions.filter((customer) => customer.customerType === "business" && `${customer.name} ${customer.vehicles.map((vehicle) => vehicle.plate).join(" ")}`.toLowerCase().includes(businessQuery.toLowerCase())).slice(0, 6);
   const timeChoices = [...new Set([...(selectedBooking && form.time ? [form.time] : []), ...modalSlots])];
+  const smsTemplates: Record<SmsTemplate, { label: string; text: string }> = {
+    booking_confirmation: { label: "Bookingbekræftelse", text: `Hej ${form.customer || "kunde"}. Din tid hos Midtjysk Bilsyn er ${form.date} kl. ${form.time || "--:--"}. Svar gerne på denne SMS ved spørgsmål.` },
+    booking_reminder: { label: "Påmindelse", text: `Påmindelse: Du har tid hos Midtjysk Bilsyn ${form.date} kl. ${form.time || "--:--"}. Husk registreringsnummeret på bilen.` },
+    booking_changed: { label: "Booking ændret", text: `Din tid hos Midtjysk Bilsyn er ændret til ${form.date} kl. ${form.time || "--:--"}.` },
+    booking_cancelled: { label: "Booking aflyst", text: `Din tid hos Midtjysk Bilsyn ${form.date} kl. ${form.time || "--:--"} er aflyst. Kontakt os, hvis du vil finde en ny tid.` },
+  };
 
   const flash = useCallback((message: string) => {
     setNotice(message);
@@ -226,6 +235,8 @@ export function Dashboard() {
     setModalSlots(slots);
     setBusinessQuery("");
     setVehicleLookup(null);
+    setSmsTemplate("booking_confirmation");
+    setSmsPhone("");
     setModalOpen(true);
   };
 
@@ -240,6 +251,8 @@ export function Dashboard() {
     setModalSlots(availableSlots);
     setBusinessQuery(booking.customerType === "business" ? booking.customer : "");
     setVehicleLookup(null);
+    setSmsTemplate("booking_confirmation");
+    setSmsPhone("");
     setModalOpen(true);
   };
 
@@ -460,6 +473,12 @@ export function Dashboard() {
                 </div>
               </section>
             </div>
+            <section className="sms-panel" aria-label="SMS til kunden">
+              <div className="sms-panel-heading"><div><span className="sms-label">SMS</span><div><strong>Send besked til kunden</strong><small>GatewayAPI klargjort — afsendelse aktiveres senere</small></div></div><span className="sms-status">Ikke aktiveret</span></div>
+              <div className="sms-controls"><label className="smart-field">Telefonnummer<input value={smsPhone} onChange={(event) => setSmsPhone(event.target.value)} placeholder="+45 20 12 34 56" /></label><label className="smart-field">Skabelon<select value={smsTemplate} onChange={(event) => setSmsTemplate(event.target.value as SmsTemplate)}>{Object.entries(smsTemplates).map(([key, template]) => <option key={key} value={key}>{template.label}</option>)}</select></label></div>
+              <div className="sms-preview"><span>Forhåndsvisning</span><p>{smsTemplates[smsTemplate].text}</p><small>{smsTemplates[smsTemplate].text.length}/1600 tegn</small></div>
+              <button className="sms-send" disabled type="button" onClick={() => flash("GatewayAPI er ikke aktiveret endnu")}>Send SMS</button>
+            </section>
             <div className="modal-actions">
               {selectedBooking && <button className="danger-button" disabled={saving} onClick={() => void cancelBooking()}>Aflys booking</button>}
               <button className="secondary-button" disabled={saving} onClick={() => setModalOpen(false)}>Luk</button>
