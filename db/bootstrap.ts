@@ -100,6 +100,19 @@ const schemaStatements = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS uidx_sms_booking_kind ON sms_messages(booking_id, kind)`,
   `CREATE INDEX IF NOT EXISTS idx_sms_status_scheduled ON sms_messages(status, scheduled_at)`,
+  `CREATE TABLE IF NOT EXISTS invoice_drafts (
+    id TEXT PRIMARY KEY NOT NULL,
+    customer_name TEXT NOT NULL,
+    period TEXT NOT NULL,
+    description TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    unit_price_ore INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    source_reference TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uidx_invoice_drafts_source ON invoice_drafts(source_reference)`,
 ];
 
 const demoBookings = [
