@@ -5,6 +5,7 @@ import { toDateAndTime, toTimestamp } from "../../../../lib/bookings";
 
 type Rule = { kind: string; weekday: number | null; starts_at: string | null; ends_at: string | null; date_from: string | null; date_to: string | null };
 type BookingRow = { starts_at: number };
+type AbsenceRow = { date_from: string; date_to: string };
 
 const addDays = (date: string, days: number) => {
   const value = new Date(`${date}T12:00:00Z`);
@@ -28,10 +29,11 @@ export async function GET(request: Request) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return Response.json({ error: "Ugyldig startdato" }, { status: 400 });
   const end = addDays(start, 7);
   const d1 = getD1();
-  const [ruleResult, bookingResult] = await Promise.all([
+  const [ruleResult, bookingResult, absenceResult] = await Promise.all([
     d1.prepare("SELECT kind, weekday, starts_at, ends_at, date_from, date_to FROM availability_rules WHERE station_id = ?").bind(bookingStationId).all<Rule>(),
     d1.prepare("SELECT starts_at FROM bookings WHERE station_id = ? AND starts_at >= ? AND starts_at < ? AND status NOT IN ('cancelled', 'no_show')")
       .bind(bookingStationId, toTimestamp(start, "00:00"), toTimestamp(end, "00:00")).all<BookingRow>(),
+    d1.prepare("SELECT date_from, date_to FROM employee_absences WHERE employee_id = 'emp-1' AND date_to >= ? AND date_from <= ?").bind(start, addDays(start, 6)).all<AbsenceRow>(),
   ]);
   const occupied = new Map<string, Set<string>>();
   for (const booking of bookingResult.results) {
@@ -43,11 +45,12 @@ export async function GET(request: Request) {
 
   const days = Array.from({ length: 7 }, (_, index) => {
     const date = addDays(start, index);
+    const employeeAbsent = absenceResult.results.some((absence) => absence.date_from <= date && absence.date_to >= date);
     const weekday = index + 1;
     const rules = ruleResult.results.filter((rule) => rule.weekday === weekday || (rule.date_from && rule.date_to && rule.date_from <= date && rule.date_to >= date));
     const forcedClosed = rules.some((rule) => rule.kind === "closed_day" || rule.kind === "holiday" || rule.kind === "vacation");
     const opening = rules.find((rule) => rule.kind === "opening_hours" && rule.starts_at && rule.ends_at);
-    if (!opening || forcedClosed) return { date, weekday, closed: true, totalSlots: 0, bookedSlots: 0, availableSlots: [] as string[] };
+    if (!opening || forcedClosed || employeeAbsent) return { date, weekday, closed: true, totalSlots: 0, bookedSlots: 0, availableSlots: [] as string[] };
     const breaks = rules.filter((rule) => rule.kind === "break" && rule.starts_at && rule.ends_at);
     const allSlots: string[] = [];
     for (let minute = toMinutes(opening.starts_at!); minute < toMinutes(opening.ends_at!); minute += 20) {
