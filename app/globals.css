@@ -163,7 +163,7 @@ main { grid-column: 2; min-width: 0; }
   .workspace > .week-capacity { grid-column: 1; grid-row: 2; }
   .workspace > .day-layout { display: contents; }
   .workspace > .day-layout > .booking-list-card { grid-column: 1; grid-row: 3; }
-  .workspace > .day-layout > .day-aside { position: absolute; top: 104px; right: 0; width: 320px; }
+  .workspace > .day-layout > .day-aside { position: absolute; top: 142px; right: 0; width: 320px; }
 }
 
 @media (max-width: 1100px) {
