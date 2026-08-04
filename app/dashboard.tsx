@@ -9,7 +9,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  CircleHelp,
   Clock3,
   FileText,
   MessageSquare,
@@ -347,7 +346,6 @@ export function Dashboard() {
           <div className="top-actions">
             <button className="icon-button" aria-label="Søg" onClick={() => flash("Søgning bliver tilføjet i næste etape")}><Search size={19} /></button>
             <button className="icon-button notification" aria-label="Notifikationer" onClick={() => flash("Du har 2 nye driftsbeskeder")}><Bell size={19} /><i /></button>
-            <button className="icon-button" aria-label="Hjælp" onClick={() => flash("Hjælpecenter kommer senere")}><CircleHelp size={19} /></button>
           </div>
         </header>
 
