@@ -4,7 +4,6 @@ import {
   Bell,
   Building2,
   CalendarDays,
-  CarFront,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -12,7 +11,6 @@ import {
   CircleHelp,
   Clock3,
   FileText,
-  LayoutDashboard,
   Menu,
   MoreHorizontal,
   Plus,
@@ -23,7 +21,9 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { AvailabilityView } from "./availability-view";
+import { CustomersView } from "./customers-view";
 
 type CustomerType = "private" | "business";
 type BookingStatus = "confirmed" | "arrived" | "awaiting_confirmation" | "completed";
@@ -41,11 +41,9 @@ type Booking = {
 };
 
 const nav = [
-  { label: "Overblik", icon: LayoutDashboard },
-  { label: "Booking", icon: CalendarDays, active: true },
-  { label: "Kunder", icon: Users },
-  { label: "Køretøjer", icon: CarFront },
-  { label: "Fakturering", icon: FileText, badge: "4" },
+  { id: "bookings", label: "Dagens bookinger", icon: CalendarDays },
+  { id: "customers", label: "Kunder & køretøjer", icon: Users },
+  { id: "invoices", label: "Fakturering", icon: FileText, badge: "4" },
 ];
 
 const initialBookings: Booking[] = [
@@ -81,6 +79,7 @@ const emptyForm = { date: "2026-08-04", time: "11:20", customer: "", customerTyp
 
 export function Dashboard() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [activeView, setActiveView] = useState<"bookings" | "customers" | "availability">("bookings");
   const [filter, setFilter] = useState<"alle" | CustomerType>("alle");
   const [modalOpen, setModalOpen] = useState(false);
   const [notice, setNotice] = useState("");
@@ -95,9 +94,16 @@ export function Dashboard() {
   const businessCount = bookings.length - privateCount;
   const completedCount = bookings.filter((booking) => booking.status === "completed").length;
 
-  const flash = (message: string) => {
+  const flash = useCallback((message: string) => {
     setNotice(message);
     window.setTimeout(() => setNotice(""), 2600);
+  }, []);
+
+  const navigate = (view: string) => {
+    if (view === "invoices") return flash("Fakturering åbnes i en kommende etape");
+    setActiveView(view as "bookings" | "customers" | "availability");
+    setMenuOpen(false);
+    setModalOpen(false);
   };
 
   const reloadBookings = async () => {
@@ -195,14 +201,14 @@ export function Dashboard() {
           {nav.map((item) => {
             const Icon = item.icon;
             return (
-              <button key={item.label} className={`nav-item ${item.active ? "active" : ""}`} onClick={() => flash(`${item.label} åbnes i en kommende etape`)}>
+              <button key={item.label} className={`nav-item ${activeView === item.id ? "active" : ""}`} onClick={() => navigate(item.id)}>
                 <Icon size={19} strokeWidth={1.8} /><span>{item.label}</span>{item.badge && <em>{item.badge}</em>}
               </button>
             );
           })}
           <p className="nav-label nav-section">Administration</p>
           <button className="nav-item" onClick={() => flash("Medarbejdere åbnes i en kommende etape")}><ShieldCheck size={19} strokeWidth={1.8} /><span>Medarbejdere</span></button>
-          <button className="nav-item" onClick={() => flash("Indstillinger åbnes i en kommende etape")}><Settings size={19} strokeWidth={1.8} /><span>Indstillinger</span></button>
+          <button className={`nav-item ${activeView === "availability" ? "active" : ""}`} onClick={() => navigate("availability")}><Settings size={19} strokeWidth={1.8} /><span>Åbningstider</span></button>
         </nav>
         <div className="sidebar-status">
           <div className="status-line"><i /><span>Systemet kører normalt</span></div>
@@ -227,6 +233,7 @@ export function Dashboard() {
         </header>
 
         <div className="workspace">
+          {activeView === "customers" ? <CustomersView onNotify={flash} /> : activeView === "availability" ? <AvailabilityView onNotify={flash} /> : <>
           <section className="page-heading">
             <div>
               <p className="eyebrow">Tirsdag · 4. august 2026</p>
@@ -304,6 +311,7 @@ export function Dashboard() {
               </section>
             </aside>
           </div>
+          </>}
         </div>
       </main>
 

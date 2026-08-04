@@ -16,6 +16,8 @@ test("den danske dagsoversigt indeholder bookingflowet", async () => {
   assert.match(dashboard, /Erhverv/);
   assert.match(dashboard, /Aflys booking/);
   assert.match(dashboard, /\/api\/bookings/);
+  assert.match(dashboard, /CustomersView/);
+  assert.match(dashboard, /AvailabilityView/);
   assert.doesNotMatch(dashboard, /codex-preview|react-loading-skeleton/i);
 });
 

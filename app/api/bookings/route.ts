@@ -22,9 +22,12 @@ function mapBooking(row: BookingRow): BookingRecord {
 
 async function availabilityFor(date: string, rows: BookingRow[]) {
   const d1 = getD1();
-  const weekday = new Date(`${date}T12:00:00+02:00`).getDay();
-  const rules = await d1.prepare("SELECT kind, starts_at, ends_at FROM availability_rules WHERE station_id = ? AND weekday = ? ORDER BY kind")
-    .bind(bookingStationId, weekday).all<{ kind: string; starts_at: string; ends_at: string }>();
+  const jsWeekday = new Date(`${date}T12:00:00+02:00`).getDay();
+  const weekday = jsWeekday === 0 ? 7 : jsWeekday;
+  const rules = await d1.prepare(`SELECT kind, starts_at, ends_at FROM availability_rules
+    WHERE station_id = ? AND (weekday = ? OR (date_from IS NOT NULL AND date_from <= ? AND date_to >= ?)) ORDER BY kind`)
+    .bind(bookingStationId, weekday, date, date).all<{ kind: string; starts_at: string; ends_at: string }>();
+  if (rules.results.some((rule) => rule.kind === "holiday" || rule.kind === "vacation" || rule.kind === "closed_day")) return [];
   const opening = rules.results.find((rule) => rule.kind === "opening_hours");
   if (!opening) return [];
   const breaks = rules.results.filter((rule) => rule.kind === "break");
