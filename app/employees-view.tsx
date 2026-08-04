@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarDays, Check, Clock3, ShieldCheck, UserRound } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Employee = { id: string; name: string; role: string; status: "Aktiv" | "På ferie"; initials: string; hours: string; absence?: string };
 const demo: Employee[] = [
@@ -14,6 +14,7 @@ export function EmployeesView({ onNotify }: { onNotify: (message: string) => voi
   const [employees] = useState(demo);
   const [tab, setTab] = useState<"people" | "hours" | "absence">("people");
   const [workTimes, setWorkTimes] = useState<Record<string, { start: string; end: string; working: boolean }>>({ Mandag: { start: "08:00", end: "16:20", working: true }, Tirsdag: { start: "08:00", end: "16:20", working: true }, Onsdag: { start: "08:00", end: "16:20", working: true }, Torsdag: { start: "08:00", end: "16:20", working: true }, Fredag: { start: "08:00", end: "16:20", working: true } });
+  useEffect(() => { const saved = localStorage.getItem("mb-work-times"); if (saved) { try { setWorkTimes(JSON.parse(saved)); } catch { /* ignore malformed local preferences */ } } }, []);
   const saveWorkTimes = async () => { const days = Object.entries(workTimes); await Promise.all(days.map(([, value], index) => fetch("/api/employees", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "work_rule", employeeId: "emp-1", weekday: index + 1, startsAt: value.start, endsAt: value.end, working: value.working }) }))); localStorage.setItem("mb-work-times", JSON.stringify(workTimes)); onNotify("Arbejdstiderne er gemt"); };
   const active = employees.filter((employee) => employee.status === "Aktiv").length;
   return <div className="module-view employees-view">
