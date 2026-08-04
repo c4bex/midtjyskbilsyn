@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Clock3, MessageSquare, ShieldCheck } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Props = { onNotify: (message: string) => void };
 type Settings = { confirmation: boolean; reminder: boolean; reminderHours: string; sender: string; quietStart: string; quietEnd: string };
