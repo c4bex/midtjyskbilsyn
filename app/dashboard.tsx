@@ -462,7 +462,7 @@ export function Dashboard() {
                 </div>
                 {lookupLoading && <div className="lookup-card loading"><span className="lookup-spinner" /><span><strong>Slår nummerpladen op…</strong><small>Først i kundearkivet, senere også i DMR</small></span></div>}
                 {!lookupLoading && vehicleLookup?.found && <div className="lookup-card found"><CheckCircle2 size={18} /><span><strong>{vehicleLookup.vehicle?.make} {vehicleLookup.vehicle?.model} fundet</strong><small>Seneste syn: {vehicleLookup.lastInspectionDate ?? "Ikke registreret"} · Næste synsdato hentes fra DMR ved tilkobling</small></span><em>Egne data</em></div>}
-                {!lookupLoading && vehicleLookup && !vehicleLookup.found && <div className="lookup-card"><ScanSearch size={18} /><span><strong>Ikke fundet i egne data</strong><small>Mærke, model og synsdato kan hentes automatisk, når DMR-adapteren aktiveres.</small></span><em>DMR ikke tilkoblet</em></div>}
+                {!lookupLoading && vehicleLookup && !vehicleLookup.found && <div className="lookup-card"><ScanSearch size={18} /><span><strong>Nummerpladen blev ikke fundet</strong><small>{vehicleLookup.dmr.status === "connected" ? "DMR-opslaget er gennemført uden resultat." : "DMR er midlertidigt utilgængelig."}</small></span><em>{vehicleLookup.dmr.status === "connected" ? "DMR kontrolleret" : "DMR utilgængelig"}</em></div>}
               </section>
 
               <section className="booking-step time-step">

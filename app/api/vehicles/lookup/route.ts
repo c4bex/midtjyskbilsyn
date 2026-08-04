@@ -24,7 +24,7 @@ export async function GET(request: Request) {
     GROUP BY v.id, c.id`).bind(registration).first<VehicleRow>();
 
   if (!row) {
-    if (dmrAdapter.enabled) { try { const dmr = await lookupDmrVehicle(registration); if (dmr.found && dmr.vehicle) return Response.json({ found: true, source: "dmr-nas", registration: formatPlate(registration), vehicle: dmr.vehicle, lastInspectionDate: dmr.vehicle.inspectionDate, inspectionDueDate: null, dmr: { enabled: true, status: "connected", dataVersion: dmr.dataVersion } }); } catch { return Response.json({ found: false, registration: formatPlate(registration), source: "dmr-nas", dmr: { enabled: true, status: "temporarily_unavailable" } }); } }
+    if (dmrAdapter.enabled) { try { const dmr = await lookupDmrVehicle(registration); if (dmr.found && dmr.vehicle) return Response.json({ found: true, source: "dmr-nas", registration: formatPlate(registration), vehicle: dmr.vehicle, lastInspectionDate: dmr.vehicle.inspectionDate, inspectionDueDate: null, dmr: { enabled: true, status: "connected", dataVersion: dmr.dataVersion } }); return Response.json({ found: false, registration: formatPlate(registration), source: "dmr-nas", dmr: { enabled: true, status: "connected", dataVersion: dmr.dataVersion } }); } catch { return Response.json({ found: false, registration: formatPlate(registration), source: "dmr-nas", dmr: { enabled: true, status: "temporarily_unavailable" } }); } }
     return Response.json({ found: false, registration: formatPlate(registration), source: "none", dmr: { enabled: dmrAdapter.enabled, status: "not_connected" } });
   }
   return Response.json({
