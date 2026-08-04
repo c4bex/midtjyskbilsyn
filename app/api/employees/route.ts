@@ -31,17 +31,20 @@ export async function POST(request: Request) {
   if (body.type === "employee_update") {
     if (!body.employeeId || !body.displayName?.trim() || !body.role?.trim()) return Response.json({ error: "Navn og rolle skal udfyldes" }, { status: 400 });
     await getD1().prepare("UPDATE employees SET display_name = ?, role = ?, active = ?, updated_at = ? WHERE id = ? AND station_id = ?").bind(body.displayName.trim(), body.role.trim(), body.active === false ? 0 : 1, Date.now(), body.employeeId, bookingStationId).run();
+    await getD1().prepare("INSERT INTO audit_events (id, occurred_at, actor_type, actor_id, action, entity_type, entity_id, correlation_id, after_json) VALUES (?, ?, 'employee', ?, 'employee.updated', 'employee', ?, ?, ?)").bind(crypto.randomUUID(), Date.now(), actor.id, body.employeeId, crypto.randomUUID(), JSON.stringify({ displayName: body.displayName.trim(), role: body.role.trim(), active: body.active !== false })).run();
     return Response.json({ ok: true, actor: actor.displayName });
   }
   if (body.type === "work_rule") {
     if (!body.employeeId || !body.weekday || body.weekday < 1 || body.weekday > 5 || (body.working && (!/^\d{2}:\d{2}$/.test(body.startsAt ?? "") || !/^\d{2}:\d{2}$/.test(body.endsAt ?? "")))) return Response.json({ error: "Ugyldig arbejdstidsregel" }, { status: 400 });
     const now = Date.now();
     await getD1().prepare("INSERT INTO employee_work_rules (id, employee_id, weekday, starts_at, ends_at, working, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(employee_id, weekday) DO UPDATE SET starts_at = excluded.starts_at, ends_at = excluded.ends_at, working = excluded.working, updated_at = excluded.updated_at").bind(crypto.randomUUID(), body.employeeId, body.weekday, body.startsAt ?? null, body.endsAt ?? null, body.working ? 1 : 0, now, now).run();
+    await getD1().prepare("INSERT INTO audit_events (id, occurred_at, actor_type, actor_id, action, entity_type, entity_id, correlation_id, after_json) VALUES (?, ?, 'employee', ?, 'employee.work_rule.updated', 'employee_work_rule', ?, ?, ?)").bind(crypto.randomUUID(), now, actor.id, body.employeeId, crypto.randomUUID(), JSON.stringify(body)).run();
     return Response.json({ ok: true, actor: actor.displayName });
   }
   if (!body.employeeId || !body.kind || !/^\d{4}-\d{2}-\d{2}$/.test(body.dateFrom ?? "") || !/^\d{4}-\d{2}-\d{2}$/.test(body.dateTo ?? "")) return Response.json({ error: "Medarbejder, type og gyldig periode skal udfyldes" }, { status: 400 });
   const now = Date.now();
   const id = crypto.randomUUID();
   await getD1().prepare("INSERT INTO employee_absences (id, employee_id, kind, date_from, date_to, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(id, body.employeeId, body.kind, body.dateFrom, body.dateTo, body.note ?? null, now, now).run();
+  await getD1().prepare("INSERT INTO audit_events (id, occurred_at, actor_type, actor_id, action, entity_type, entity_id, correlation_id, after_json) VALUES (?, ?, 'employee', ?, 'employee.absence.created', 'employee_absence', ?, ?, ?)").bind(crypto.randomUUID(), now, actor.id, id, crypto.randomUUID(), JSON.stringify(body)).run();
   return Response.json({ id, actor: actor.displayName }, { status: 201 });
 }
