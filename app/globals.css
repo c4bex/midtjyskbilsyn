@@ -1,12 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --navy: #14273d;
-  --navy-deep: #0d1d2f;
-  --ink: #172536;
+  --mb-yellow: #ffd400;
+  --mb-black: #111111;
+  --mb-charcoal: #242629;
+  --mb-gray: #aeb0b3;
+  --navy: #111111;
+  --navy-deep: #242629;
+  --ink: #242629;
   --muted: #6d7887;
-  --line: #e1e6eb;
-  --canvas: #f4f6f8;
+  --line: #e1e2e3;
+  --canvas: #f4f4f2;
   --blue: #2d6cdf;
   --blue-soft: #eaf1ff;
   --green: #168462;
@@ -19,7 +23,7 @@
 
 * { box-sizing: border-box; }
 html { background: var(--canvas); }
-body { margin: 0; color: var(--ink); background: var(--canvas); font-family: var(--font-geist-sans), Arial, sans-serif; }
+body { margin: 0; color: var(--ink); background: var(--canvas); font-family: var(--font-montserrat), Arial, sans-serif; }
 button, input, select { font: inherit; }
 button { color: inherit; }
 .app-shell { min-height: 100vh; display: grid; grid-template-columns: 244px minmax(0, 1fr); }
@@ -27,7 +31,7 @@ button { color: inherit; }
 .sidebar { position: fixed; z-index: 40; inset: 0 auto 0 0; width: 244px; padding: 22px 14px 14px; display: flex; flex-direction: column; color: #dbe5ef; background: linear-gradient(175deg, var(--navy), var(--navy-deep)); box-shadow: 8px 0 26px rgba(14,31,51,.06); }
 .brand { height: 54px; padding: 0 10px 18px; display: flex; align-items: center; gap: 11px; border-bottom: 1px solid rgba(255,255,255,.09); }
 .brand-mark { width: 35px; height: 35px; display: grid; place-items: center; flex: 0 0 35px; border-radius: 10px; color: var(--navy); background: #e9f0f7; box-shadow: 0 3px 12px rgba(0,0,0,.13); }
-.brand-mark span { font-size: 11px; font-weight: 850; letter-spacing: -.04em; }
+.brand-mark span { font-family: var(--font-montserrat), Arial, sans-serif; font-size: 15px; font-weight: 850; letter-spacing: -.12em; }.brand-mark b { font-weight: 800; }.brand-mark i { color: var(--mb-yellow); font-style: normal; font-weight: 850; }
 .brand > div:nth-child(2) { display: flex; flex-direction: column; line-height: 1.03; }
 .brand strong { color: #fff; font-size: 16px; letter-spacing: -.025em; }
 .brand > div > span { margin-top: 3px; color: #9eb1c4; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
@@ -64,7 +68,7 @@ main { grid-column: 2; min-width: 0; }
 .eyebrow { margin: 0 0 6px !important; color: #778392 !important; font-size: 10px !important; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; }
 .page-heading h1 { margin: 0; color: #172637; font-size: clamp(25px,2.3vw,32px); line-height: 1.15; font-weight: 700; letter-spacing: -.04em; }
 .page-heading p { margin: 7px 0 0; color: var(--muted); font-size: 12px; }
-.primary-button { min-height: 40px; padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 9px; color: #fff; background: var(--blue); box-shadow: 0 5px 13px rgba(45,108,223,.22); font-size: 12px; font-weight: 650; cursor: pointer; transition: .18s ease; }
+.primary-button { min-height: 40px; padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 9px; color: var(--mb-black); background: var(--mb-yellow); box-shadow: 0 5px 13px rgba(255,212,0,.24); font-size: 12px; font-weight: 700; cursor: pointer; transition: .18s ease; }
 .primary-button:hover { transform: translateY(-1px); background: #235fc9; }
 
 .day-summary { min-height: 72px; margin-bottom: 13px; padding: 10px 18px; display: flex; align-items: center; gap: 0; border: 1px solid var(--line); border-radius: 12px; background: #fff; box-shadow: 0 3px 12px rgba(20,39,61,.025); }
