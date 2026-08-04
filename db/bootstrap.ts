@@ -134,6 +134,17 @@ const schemaStatements = [
     updated_at INTEGER NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS idx_employee_absences_dates ON employee_absences(date_from, date_to)`,
+  `CREATE TABLE IF NOT EXISTS employee_work_rules (
+    id TEXT PRIMARY KEY NOT NULL,
+    employee_id TEXT NOT NULL,
+    weekday INTEGER NOT NULL,
+    starts_at TEXT,
+    ends_at TEXT,
+    working INTEGER DEFAULT 1 NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uidx_employee_work_rules_day ON employee_work_rules(employee_id, weekday)`,
 ];
 
 const demoBookings = [

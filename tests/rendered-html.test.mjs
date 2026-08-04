@@ -91,6 +91,7 @@ test("medarbejderdata har separat fraværstabel og API", async () => {
     readFile(new URL("../app/api/employees/route.ts", import.meta.url), "utf8"),
   ]);
   assert.match(bootstrap, /CREATE TABLE IF NOT EXISTS employee_absences/);
+  assert.match(bootstrap, /CREATE TABLE IF NOT EXISTS employee_work_rules/);
   assert.match(route, /employee_absences/);
   assert.match(route, /dateFrom/);
 });

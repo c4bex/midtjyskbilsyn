@@ -15,11 +15,12 @@ export async function GET(request: Request) {
       d1.prepare("INSERT OR IGNORE INTO employees (id, station_id, display_name, email_normalized, role, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)").bind("emp-3", bookingStationId, "Pernille Havn Mouritzen", "pernille@example.invalid", "bogholder", now, now),
     ]);
   }
-  const [employees, absences] = await Promise.all([
+  const [employees, absences, workRules] = await Promise.all([
     d1.prepare("SELECT id, display_name AS name, role, active FROM employees WHERE station_id = ? ORDER BY display_name").bind(bookingStationId).all(),
     d1.prepare("SELECT id, employee_id, kind, date_from, date_to, note FROM employee_absences ORDER BY date_from").all(),
+    d1.prepare("SELECT id, employee_id, weekday, starts_at, ends_at, working FROM employee_work_rules ORDER BY employee_id, weekday").all(),
   ]);
-  return Response.json({ employees: employees.results, absences: absences.results });
+  return Response.json({ employees: employees.results, absences: absences.results, workRules: workRules.results });
 }
 
 export async function POST(request: Request) {
