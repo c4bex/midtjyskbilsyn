@@ -12,6 +12,7 @@ import {
   CircleHelp,
   Clock3,
   FileText,
+  MessageSquare,
   Menu,
   MoreHorizontal,
   Plus,
@@ -26,6 +27,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { AvailabilityView } from "./availability-view";
 import { CustomersView } from "./customers-view";
+import { SmsSettingsView } from "./sms-settings-view";
 
 type CustomerType = "private" | "business";
 type BookingStatus = "confirmed" | "arrived" | "awaiting_confirmation" | "completed";
@@ -83,7 +85,7 @@ const emptyForm = { date: "2026-08-04", time: "11:20", customer: "", customerTyp
 
 export function Dashboard() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [activeView, setActiveView] = useState<"bookings" | "customers" | "availability">("bookings");
+  const [activeView, setActiveView] = useState<"bookings" | "customers" | "availability" | "sms">("bookings");
   const [filter, setFilter] = useState<"alle" | CustomerType>("alle");
   const [modalOpen, setModalOpen] = useState(false);
   const [notice, setNotice] = useState("");
@@ -128,7 +130,7 @@ export function Dashboard() {
 
   const navigate = (view: string) => {
     if (view === "invoices") return flash("Fakturering åbnes i en kommende etape");
-    setActiveView(view as "bookings" | "customers" | "availability");
+    setActiveView(view as "bookings" | "customers" | "availability" | "sms");
     setMenuOpen(false);
     setModalOpen(false);
   };
@@ -322,6 +324,7 @@ export function Dashboard() {
           <p className="nav-label nav-section">Administration</p>
           <button className="nav-item" onClick={() => flash("Medarbejdere åbnes i en kommende etape")}><ShieldCheck size={19} strokeWidth={1.8} /><span>Medarbejdere</span></button>
           <button className={`nav-item ${activeView === "availability" ? "active" : ""}`} onClick={() => navigate("availability")}><Settings size={19} strokeWidth={1.8} /><span>Åbningstider</span></button>
+          <button className={`nav-item ${activeView === "sms" ? "active" : ""}`} onClick={() => navigate("sms")}><MessageSquare size={19} strokeWidth={1.8} /><span>SMS-indstillinger</span></button>
         </nav>
         <div className="sidebar-status">
           <div className="status-line"><i /><span>Systemet kører normalt</span></div>
@@ -346,7 +349,7 @@ export function Dashboard() {
         </header>
 
         <div className="workspace">
-          {activeView === "customers" ? <CustomersView onNotify={flash} /> : activeView === "availability" ? <AvailabilityView onNotify={flash} /> : <>
+          {activeView === "customers" ? <CustomersView onNotify={flash} /> : activeView === "availability" ? <AvailabilityView onNotify={flash} /> : activeView === "sms" ? <SmsSettingsView onNotify={flash} /> : <>
           <section className="page-heading">
             <div>
               <p className="eyebrow">{dayNames[new Date(`${selectedDate}T12:00:00Z`).getUTCDay() === 0 ? 6 : new Date(`${selectedDate}T12:00:00Z`).getUTCDay() - 1]} · {dayNumber(selectedDate)}. {monthName(selectedDate)} 2026</p>
