@@ -157,16 +157,17 @@ main { grid-column: 2; min-width: 0; }
 .closure-layout { display: grid; grid-template-columns: minmax(0,1.4fr) minmax(300px,.8fr); gap: 13px; }.closure-form { padding: 15px 17px; display: grid; grid-template-columns: 110px 130px 130px 1fr auto; align-items: end; gap: 10px; }.closure-form label { display: grid; gap: 6px; color: #687582; font-size: 8px; font-weight: 650; }.closure-form .primary-button { min-height: 34px; height: 34px; box-shadow: none; }.existing-closures { padding-bottom: 5px; }.existing-closures > h2 { margin: 0; padding: 18px 16px 12px; font-size: 12px; }.existing-closures article { min-height: 56px; margin: 0 14px; display: grid; grid-template-columns: 32px 1fr 28px; align-items: center; gap: 9px; border-top: 1px solid #edf0f3; }.existing-closures article > div { display: grid; gap: 3px; }.existing-closures strong { font-size: 9px; }.existing-closures small { color: #8e98a2; font-size: 8px; }.existing-closures article > button { width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 7px; color: #ae6259; background: transparent; cursor: pointer; }.existing-closures article > button:hover { background: #fff0ee; }
 
 @media (min-width: 1101px) {
-  .workspace { display: grid; grid-template-columns: minmax(0,1fr) 320px; align-items: start; column-gap: 13px; }
+  .workspace { position: relative; display: grid; grid-template-columns: minmax(0,1fr) 320px; align-items: start; column-gap: 13px; }
   .workspace > .page-heading { grid-column: 1 / -1; }
   .workspace > .day-summary { grid-column: 1 / -1; grid-row: 4; }
   .workspace > .week-capacity { grid-column: 1; grid-row: 2; }
   .workspace > .day-layout { display: contents; }
   .workspace > .day-layout > .booking-list-card { grid-column: 1; grid-row: 3; }
-  .workspace > .day-layout > .day-aside { grid-column: 2; grid-row: 2 / span 2; width: auto; }
+  .workspace > .day-layout > .day-aside { position: absolute; top: 104px; right: 0; width: 320px; }
 }
 
 @media (max-width: 1100px) {
+  .day-aside { position: static; width: auto; }
   .day-summary > div { min-width: 105px; padding: 0 14px; }.day-layout { grid-template-columns: minmax(0,1fr) 320px; }.booking-list-card { overflow-x: auto; }
   .closure-layout { grid-template-columns: 1fr; }.closure-form { grid-template-columns: 110px 1fr 1fr; }.closure-reason { grid-column: 1 / 3; }
 }
@@ -194,5 +195,6 @@ main { grid-column: 2; min-width: 0; }
 }
 
 .capacity-days > button.selected-day { outline: 2px solid var(--blue); outline-offset: -2px; }
+.capacity-days > button.today { box-shadow: none; }
 
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
