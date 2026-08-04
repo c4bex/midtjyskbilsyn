@@ -72,6 +72,7 @@ const initialBookings: Booking[] = [
 ];
 
 const dayNames = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag", "Søndag"];
+const isoWeek = (date: string) => { const value = new Date(`${date}T12:00:00Z`); const day = value.getUTCDay() || 7; value.setUTCDate(value.getUTCDate() + 4 - day); const start = new Date(Date.UTC(value.getUTCFullYear(), 0, 1)); return Math.ceil((((value.getTime() - start.getTime()) / 86400000) + 1) / 7); };
 const addDays = (date: string, amount: number) => { const value = new Date(`${date}T12:00:00Z`); value.setUTCDate(value.getUTCDate() + amount); return value.toISOString().slice(0, 10); };
 const dayNumber = (date: string) => Number(date.slice(-2));
 const monthName = (date: string) => new Intl.DateTimeFormat("da-DK", { month: "short", timeZone: "Europe/Copenhagen" }).format(new Date(`${date}T12:00:00Z`)).replace(".", "");
@@ -467,7 +468,7 @@ export function Dashboard() {
               <section className="booking-step time-step">
                 <div className="step-title"><em>3</em><div><strong>Vælg en ledig tid</strong><span>Kun tider der kan bookes vises</span></div></div>
                 <div className="date-and-type">
-                  <label className="smart-field">Dato<input type="date" value={form.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => { const date = event.target.value; setForm({ ...form, date, time: "" }); void loadSlots(date); }} /></label>
+                  <label className="smart-field">Dato<span className="date-with-week"><input type="date" value={form.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => { const date = event.target.value; setForm({ ...form, date, time: "" }); void loadSlots(date); }} /><small>Uge {isoWeek(form.date)}</small></span></label>
                   <label className="smart-field">Synstype<select value={form.inspection} onChange={(event) => setForm({ ...form, inspection: event.target.value })}><option>Periodisk syn</option><option>Omsyn</option><option>Varebilssyn</option><option>Motorcykelsyn</option></select></label>
                 </div>
                 <div className="slot-heading"><span>{slotsLoading ? "Henter ledige tider…" : `${modalSlots.length} ledige tider`}</span><small>20 min. pr. booking</small></div>
