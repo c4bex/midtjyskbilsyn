@@ -27,7 +27,13 @@ export async function POST(request: Request) {
   const actor = await authorizeBookingRequest(request);
   if (!actor) return unauthorizedResponse();
   await ensureBookingDatabase();
-  const body = await request.json() as { employeeId?: string; kind?: string; dateFrom?: string; dateTo?: string; note?: string };
+  const body = await request.json() as { type?: "absence" | "work_rule"; employeeId?: string; kind?: string; dateFrom?: string; dateTo?: string; note?: string; weekday?: number; startsAt?: string; endsAt?: string; working?: boolean };
+  if (body.type === "work_rule") {
+    if (!body.employeeId || !body.weekday || body.weekday < 1 || body.weekday > 5 || (body.working && (!/^\d{2}:\d{2}$/.test(body.startsAt ?? "") || !/^\d{2}:\d{2}$/.test(body.endsAt ?? "")))) return Response.json({ error: "Ugyldig arbejdstidsregel" }, { status: 400 });
+    const now = Date.now();
+    await getD1().prepare("INSERT INTO employee_work_rules (id, employee_id, weekday, starts_at, ends_at, working, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(employee_id, weekday) DO UPDATE SET starts_at = excluded.starts_at, ends_at = excluded.ends_at, working = excluded.working, updated_at = excluded.updated_at").bind(crypto.randomUUID(), body.employeeId, body.weekday, body.startsAt ?? null, body.endsAt ?? null, body.working ? 1 : 0, now, now).run();
+    return Response.json({ ok: true, actor: actor.displayName });
+  }
   if (!body.employeeId || !body.kind || !/^\d{4}-\d{2}-\d{2}$/.test(body.dateFrom ?? "") || !/^\d{4}-\d{2}-\d{2}$/.test(body.dateTo ?? "")) return Response.json({ error: "Medarbejder, type og gyldig periode skal udfyldes" }, { status: 400 });
   const now = Date.now();
   const id = crypto.randomUUID();
