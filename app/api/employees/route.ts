@@ -10,9 +10,9 @@ export async function GET(request: Request) {
   if (!existing?.count) {
     const now = Date.now();
     await d1.batch([
-      d1.prepare("INSERT OR IGNORE INTO employees (id, station_id, display_name, email_normalized, role, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)").bind("emp-1", bookingStationId, "Rasmus Mouritzen", "rasmus@example.invalid", "administrator", now, now),
-      d1.prepare("INSERT OR IGNORE INTO employees (id, station_id, display_name, email_normalized, role, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)").bind("emp-2", bookingStationId, "Mikkel Jensen", "mikkel@example.invalid", "synsinspektoer", now, now),
-      d1.prepare("INSERT OR IGNORE INTO employees (id, station_id, display_name, email_normalized, role, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)").bind("emp-3", bookingStationId, "Line Sørensen", "line@example.invalid", "bogholder", now, now),
+      d1.prepare("INSERT OR IGNORE INTO employees (id, station_id, display_name, email_normalized, role, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)").bind("emp-1", bookingStationId, "Peter Hartz Jensen", "peter@example.invalid", "synsinspektoer", now, now),
+      d1.prepare("INSERT OR IGNORE INTO employees (id, station_id, display_name, email_normalized, role, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)").bind("emp-2", bookingStationId, "Rasmus Havn Mourtizen", "rasmus@example.invalid", "administrator", now, now),
+      d1.prepare("INSERT OR IGNORE INTO employees (id, station_id, display_name, email_normalized, role, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)").bind("emp-3", bookingStationId, "Pernille Havn Mouritzen", "pernille@example.invalid", "bogholder", now, now),
     ]);
   }
   const [employees, absences] = await Promise.all([

@@ -5,9 +5,9 @@ import { useState } from "react";
 
 type Employee = { id: string; name: string; role: string; status: "Aktiv" | "På ferie"; initials: string; hours: string; absence?: string };
 const demo: Employee[] = [
-  { id: "emp-1", name: "Rasmus Mouritzen", role: "Administrator", status: "Aktiv", initials: "RM", hours: "Man–fre · 07:30–16:30" },
-  { id: "emp-2", name: "Mikkel Jensen", role: "Synsinspektør", status: "Aktiv", initials: "MJ", hours: "Man–fre · 08:00–16:20" },
-  { id: "emp-3", name: "Line Sørensen", role: "Bogholder", status: "På ferie", initials: "LS", hours: "Man–tor · 08:00–15:30", absence: "Ferie · 10.–14. august" },
+  { id: "emp-1", name: "Peter Hartz Jensen", role: "Synsinspektør", status: "Aktiv", initials: "PH", hours: "Man–fre · 08:00–16:20" },
+  { id: "emp-2", name: "Rasmus Havn Mourtizen", role: "Teknisk ansvarlig / Ejer", status: "Aktiv", initials: "RH", hours: "Man–fre · 07:30–16:30" },
+  { id: "emp-3", name: "Pernille Havn Mouritzen", role: "Bogholder / blæksprut", status: "Aktiv", initials: "PM", hours: "Man–tor · 08:00–15:30" },
 ];
 
 export function EmployeesView({ onNotify }: { onNotify: (message: string) => void }) {
