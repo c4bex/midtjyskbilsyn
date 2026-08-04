@@ -83,6 +83,23 @@ const schemaStatements = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_events(entity_type, entity_id, occurred_at)`,
   `CREATE INDEX IF NOT EXISTS idx_audit_correlation ON audit_events(correlation_id)`,
+  `CREATE TABLE IF NOT EXISTS sms_messages (
+    id TEXT PRIMARY KEY NOT NULL,
+    booking_id TEXT NOT NULL REFERENCES bookings(id),
+    kind TEXT NOT NULL,
+    recipient_encrypted TEXT NOT NULL,
+    message_text TEXT NOT NULL,
+    sender TEXT NOT NULL,
+    status TEXT NOT NULL,
+    scheduled_at INTEGER NOT NULL,
+    attempts INTEGER DEFAULT 0 NOT NULL,
+    provider_reference TEXT,
+    last_error TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uidx_sms_booking_kind ON sms_messages(booking_id, kind)`,
+  `CREATE INDEX IF NOT EXISTS idx_sms_status_scheduled ON sms_messages(status, scheduled_at)`,
 ];
 
 const demoBookings = [

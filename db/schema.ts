@@ -119,6 +119,24 @@ export const integrationJobs = sqliteTable("integration_jobs", {
   index("idx_integration_jobs_status_next_attempt").on(table.status, table.nextAttemptAt),
 ]);
 
+export const smsMessages = sqliteTable("sms_messages", {
+  id: text("id").primaryKey(),
+  bookingId: text("booking_id").notNull().references(() => bookings.id),
+  kind: text("kind", { enum: ["confirmation", "reminder", "changed", "cancelled"] }).notNull(),
+  recipientEncrypted: text("recipient_encrypted").notNull(),
+  messageText: text("message_text").notNull(),
+  sender: text("sender").notNull(),
+  status: text("status", { enum: ["planned", "queued", "processing", "sent", "failed", "cancelled"] }).notNull(),
+  scheduledAt: integer("scheduled_at", { mode: "timestamp_ms" }).notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  providerReference: text("provider_reference"),
+  lastError: text("last_error"),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("uidx_sms_booking_kind").on(table.bookingId, table.kind),
+  index("idx_sms_status_scheduled").on(table.status, table.scheduledAt),
+]);
+
 export const auditEvents = sqliteTable("audit_events", {
   id: text("id").primaryKey(),
   occurredAt: integer("occurred_at", { mode: "timestamp_ms" }).notNull(),

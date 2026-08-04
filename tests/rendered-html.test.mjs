@@ -63,6 +63,16 @@ test("SMS-politikken bekræfter private straks og springer samme dags reminder o
   assert.deepEqual(planBookingSms({ customerType: "business", phone: "+4520123456", startsAt: Date.parse("2026-08-05T14:20:00+02:00"), now }), { confirmation: "not_applicable", reminder: "not_applicable" });
 });
 
+test("SMS-køen har idempotens pr. booking og krypteret modtagerfelt", async () => {
+  const schema = await readFile(new URL("../db/schema.ts", import.meta.url), "utf8");
+  const bootstrap = await readFile(new URL("../db/bootstrap.ts", import.meta.url), "utf8");
+  assert.match(schema, /smsMessages/);
+  assert.match(schema, /recipientEncrypted/);
+  assert.match(schema, /uidx_sms_booking_kind/);
+  assert.match(bootstrap, /CREATE TABLE IF NOT EXISTS sms_messages/);
+  assert.match(bootstrap, /recipient_encrypted TEXT NOT NULL/);
+});
+
 test("integrationsadaptere er deaktiverede som standard", async () => {
   const { dineroAdapter } = await import("../lib/integrations/adapters/dinero.ts");
   const { synsprogramAdapter } = await import("../lib/integrations/adapters/synsprogram.ts");
