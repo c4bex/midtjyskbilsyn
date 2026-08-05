@@ -3,6 +3,25 @@
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
+
+Route::middleware('web')->group(function () {
+    Route::post('/login', function () {
+        $credentials = request()->validate(['email' => ['required', 'email'], 'password' => ['required', 'string']]);
+        if (!Auth::attempt($credentials)) return response()->json(['error' => 'Forkert e-mail eller adgangskode'], 401);
+        request()->session()->regenerate();
+        return response()->json(['user' => Auth::user()->only(['id', 'name', 'email'])]);
+    });
+    Route::get('/session', function () {
+        return response()->json(['authenticated' => Auth::check(), 'user' => Auth::user()?->only(['id', 'name', 'email'])]);
+    });
+    Route::post('/logout', function () {
+        Auth::logout();
+        request()->session()->invalidate();
+        request()->session()->regenerateToken();
+        return response()->json(['ok' => true]);
+    });
+});
 
 Route::middleware('api.token')->group(function () {
 
