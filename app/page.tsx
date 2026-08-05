@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Dashboard } from "./dashboard";
+import { AuthGate } from "./auth-gate";
 
 export const metadata: Metadata = {
   title: "Driftsoverblik",
@@ -7,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function Home() {
-  return <Dashboard />;
+  return <AuthGate><Dashboard /></AuthGate>;
 }
