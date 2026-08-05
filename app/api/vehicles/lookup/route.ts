@@ -12,9 +12,18 @@ type VehicleRow = {
 
 export async function GET(request: Request) {
   if (!await authorizeBookingRequest(request)) return unauthorizedResponse();
-  await ensureBookingDatabase();
   const registration = normalizePlate(new URL(request.url).searchParams.get("plate") ?? "");
   if (registration.length < 5) return Response.json({ error: "Indtast et gyldigt registreringsnummer" }, { status: 400 });
+  const laravelBaseUrl = process.env.LARAVEL_API_BASE_URL?.replace(/\/$/, "");
+  if (process.env.USE_LARAVEL_BOOKING_API === "true" && laravelBaseUrl) {
+    try {
+      const response = await fetch(`${laravelBaseUrl}/api/vehicles/lookup?registration=${encodeURIComponent(registration)}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Laravel vehicle API unavailable");
+      const data = await response.json() as { found: boolean; vehicle?: { registration: string; make: string | null; model: string | null }; customer?: { name: string; customerType: "private" | "business" } };
+      return Response.json({ ...data, source: data.found ? "local-mysql" : "none", registration: formatPlate(registration), dmr: { enabled: dmrAdapter.enabled, status: dmrAdapter.enabled ? "connected" : "not_connected" } });
+    } catch { return Response.json({ found: false, registration: formatPlate(registration), source: "local-mysql", dmr: { enabled: dmrAdapter.enabled, status: "temporarily_unavailable" } }); }
+  }
+  await ensureBookingDatabase();
   const row = await getD1().prepare(`SELECT v.id AS vehicle_id, v.registration_normalized, v.make, v.model,
     c.id AS customer_id, c.display_name, c.customer_type,
     MAX(CASE WHEN b.status = 'completed' THEN b.starts_at END) AS last_inspection_at

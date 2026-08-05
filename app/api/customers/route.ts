@@ -11,6 +11,15 @@ type CustomerRow = {
 
 export async function GET(request: Request) {
   if (!await authorizeBookingRequest(request)) return unauthorizedResponse();
+  const laravelBaseUrl = process.env.LARAVEL_API_BASE_URL?.replace(/\/$/, "");
+  if (process.env.USE_LARAVEL_BOOKING_API === "true" && laravelBaseUrl) {
+    try {
+      const response = await fetch(`${laravelBaseUrl}/api/customers`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Laravel customer API unavailable");
+      const data = await response.json() as { customers?: Array<{ id: number; name: string; customer_type: "private" | "business" }> };
+      return Response.json({ customers: (data.customers ?? []).map((customer) => ({ id: String(customer.id), name: customer.name, customerType: customer.customer_type, vehicles: [], history: [] })) });
+    } catch { return Response.json({ error: "Laravel kunde-API er midlertidigt utilgængelig" }, { status: 503 }); }
+  }
   await ensureBookingDatabase();
   const result = await getD1().prepare(`SELECT c.id AS customer_id, c.display_name, c.customer_type,
     v.id AS vehicle_id, v.registration_normalized, v.make, v.model,
