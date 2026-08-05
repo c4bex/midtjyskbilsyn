@@ -124,6 +124,12 @@ Route::get('/employees', function () {
     ])]);
 });
 
+Route::patch('/employees/{employee}/user', function (int $employee) {
+    $validated = request()->validate(['userId' => ['nullable', 'integer', 'exists:users,id']]);
+    $updated = DB::table('employees')->where('id', $employee)->update(['user_id' => $validated['userId'] ?? null, 'updated_at' => now()]);
+    return $updated ? response()->json(['ok' => true]) : response()->json(['error' => 'Medarbejderen findes ikke'], 404);
+})->middleware('permission:employees.write');
+
 Route::get('/access/roles', function () {
     return response()->json(['roles' => [
         'Teknisk ansvarlig / Ejer' => ['bookings.read', 'bookings.write', 'customers.write', 'imports.write', 'invoices.write', 'employees.write', 'settings.write'],
