@@ -21,6 +21,14 @@ class DatabaseSeeder extends Seeder
             'email' => 'test@example.com',
         ]);
 
+        foreach ([
+            ['Peter Hartz Jensen', 'Synsinspektør'],
+            ['Rasmus Havn Mouritzen', 'Teknisk ansvarlig / Ejer'],
+            ['Pernille Havn Mouritzen', 'Bogholder / blæksprut'],
+        ] as [$name, $role]) {
+            DB::table('employees')->updateOrInsert(['display_name' => $name], ['role' => $role, 'active' => true, 'updated_at' => now(), 'created_at' => now()]);
+        }
+
         $private = DB::table('customers')->updateOrInsert(
             ['external_reference' => 'demo-private-1'],
             ['display_name' => 'Maja Holm', 'customer_type' => 'private', 'updated_at' => now(), 'created_at' => now()],
