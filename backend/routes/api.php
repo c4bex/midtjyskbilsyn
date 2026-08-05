@@ -99,4 +99,10 @@ Route::get('/imports', function () {
     })]);
 });
 
+Route::get('/employees', function () {
+    return response()->json(['employees' => DB::table('employees')->where('active', true)->orderBy('display_name')->get([
+        'id', 'display_name as displayName', 'role', 'email', 'active',
+    ])]);
+});
+
 });
