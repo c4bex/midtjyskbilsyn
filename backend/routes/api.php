@@ -105,4 +105,12 @@ Route::get('/employees', function () {
     ])]);
 });
 
+Route::get('/access/roles', function () {
+    return response()->json(['roles' => [
+        'Teknisk ansvarlig / Ejer' => ['bookings.read', 'bookings.write', 'customers.write', 'imports.write', 'invoices.write', 'employees.write', 'settings.write'],
+        'Synsinspektør' => ['bookings.read', 'bookings.write', 'customers.write'],
+        'Bogholder / blæksprut' => ['bookings.read', 'customers.read', 'invoices.write'],
+    ]]);
+});
+
 });
