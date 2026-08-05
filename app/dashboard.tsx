@@ -76,6 +76,7 @@ const isoWeek = (date: string) => { const value = new Date(`${date}T12:00:00Z`);
 const addDays = (date: string, amount: number) => { const value = new Date(`${date}T12:00:00Z`); value.setUTCDate(value.getUTCDate() + amount); return value.toISOString().slice(0, 10); };
 const dayNumber = (date: string) => Number(date.slice(-2));
 const monthName = (date: string) => new Intl.DateTimeFormat("da-DK", { month: "short", timeZone: "Europe/Copenhagen" }).format(new Date(`${date}T12:00:00Z`)).replace(".", "");
+const formatDanishDate = (date: string | null | undefined) => date ? new Intl.DateTimeFormat("da-DK", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Copenhagen" }).format(new Date(date)) : "Ikke oplyst";
 
 const statusText: Record<BookingStatus, string> = {
   confirmed: "Bekræftet",
@@ -461,7 +462,7 @@ export function Dashboard() {
                   <label className="smart-field">Mærke og model<input value={form.vehicle} onChange={(event) => setForm({ ...form, vehicle: event.target.value })} placeholder="Udfyldes automatisk" /></label>
                 </div>
                 {lookupLoading && <div className="lookup-card loading"><span className="lookup-spinner" /><span><strong>Slår nummerpladen op…</strong><small>Først i kundearkivet, senere også i DMR</small></span></div>}
-                {!lookupLoading && vehicleLookup?.found && <div className="lookup-card found"><CheckCircle2 size={18} /><span><strong>{vehicleLookup.vehicle?.make} {vehicleLookup.vehicle?.model} fundet</strong><small>Seneste syn: {vehicleLookup.lastInspectionDate ?? "Ikke registreret"}</small>{vehicleLookup.inspectionDueDate && <b className="inspection-due">Næste syn: {vehicleLookup.inspectionDueDate}</b>}</span><em>{vehicleLookup.source === "dmr-nas" ? "DMR" : "Egne data"}</em></div>}
+                {!lookupLoading && vehicleLookup?.found && <div className="lookup-card found"><CheckCircle2 size={18} /><span><strong>{vehicleLookup.vehicle?.make} {vehicleLookup.vehicle?.model} fundet</strong><small>Seneste syn: {formatDanishDate(vehicleLookup.lastInspectionDate)}</small><b className="inspection-due">Næste syn: {formatDanishDate(vehicleLookup.inspectionDueDate)}</b></span><em>{vehicleLookup.source === "dmr-nas" ? "DMR" : "Egne data"}</em></div>}
                 {!lookupLoading && vehicleLookup && !vehicleLookup.found && <div className="lookup-card"><ScanSearch size={18} /><span><strong>Nummerpladen blev ikke fundet</strong><small>{vehicleLookup.dmr.status === "connected" ? "DMR-opslaget er gennemført uden resultat." : "DMR er midlertidigt utilgængelig."}</small></span><em>{vehicleLookup.dmr.status === "connected" ? "DMR kontrolleret" : "DMR utilgængelig"}</em></div>}
               </section>
 
