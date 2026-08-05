@@ -89,6 +89,7 @@ const emptyForm = { date: "2026-08-04", time: "11:20", customer: "", customerTyp
 
 export function Dashboard() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [activeView, setActiveView] = useState<"bookings" | "customers" | "availability" | "sms" | "invoices" | "employees" | "drift">("bookings");
   const [filter, setFilter] = useState<"alle" | CustomerType>("alle");
   const [modalOpen, setModalOpen] = useState(false);
@@ -334,9 +335,10 @@ export function Dashboard() {
           <div className="status-line"><i /><span>Systemet kører normalt</span></div>
           <small>Senest kontrolleret 10:58</small>
         </div>
-        <button className="profile" aria-label="Profil">
+        <button className="profile" aria-label="Profil" onClick={() => setProfileOpen((open) => !open)}>
           <span className="avatar">RM</span><span><strong>Rasmus M.</strong><small>Administrator</small></span><ChevronDown size={16} />
         </button>
+        {profileOpen && <div className="profile-menu"><button onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}>Log ud</button></div>}
       </aside>
 
       {menuOpen && <button className="scrim" aria-label="Luk menu" onClick={() => setMenuOpen(false)} />}
