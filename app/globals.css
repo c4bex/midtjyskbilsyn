@@ -217,3 +217,68 @@ main { grid-column: 2; min-width: 0; }
 .employee-tabs { display: flex; gap: 5px; padding: 5px; border: 1px solid var(--line); border-radius: 9px; background: #eef1f2; }.employee-tabs button { min-height: 34px; padding: 0 12px; display: flex; align-items: center; gap: 6px; border: 0; border-radius: 6px; color: #6e7b87; background: transparent; font-size: 9px; font-weight: 650; cursor: pointer; }.employee-tabs button.selected { color: var(--blue); background: #fff; box-shadow: 0 1px 4px rgba(20,39,61,.1); }.employee-summary { display: grid; grid-template-columns: repeat(3,1fr); border: 1px solid var(--line); border-radius: 10px; background: #fff; }.employee-summary > div { padding: 13px 17px; display: grid; gap: 3px; border-right: 1px solid var(--line); }.employee-summary > div:last-child { border-right: 0; }.employee-summary span { color: #8a959e; font-size: 8px; }.employee-summary strong { color: var(--ink); font-size: 18px; }.employee-card { overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: #fff; }.employee-table-head, .employee-row { display: grid; grid-template-columns: 1.4fr 1fr 1.1fr 90px 70px; align-items: center; gap: 12px; }.employee-table-head { min-height: 35px; padding: 0 16px; color: #929ca4; background: #fafbfb; font-size: 8px; font-weight: 700; }.employee-row { min-height: 66px; padding: 8px 16px; border-top: 1px solid #edf0f1; color: #526474; font-size: 9px; }.employee-name { display: flex; align-items: center; gap: 9px; }.employee-name i, .employee-avatar { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; color: var(--blue); background: var(--blue-soft); font-size: 8px; font-style: normal; font-weight: 750; }.employee-row em { width: fit-content; padding: 5px 7px; border-radius: 5px; font-size: 7px; font-style: normal; font-weight: 700; }.employee-row em.active { color: var(--green); background: var(--green-soft); }.employee-row em.away { color: #896b20; background: #fff4cc; }.schedule-card, .absence-card { padding: 18px; }.schedule-card h2, .absence-card h2 { margin: 0 0 4px; font-size: 13px; }.schedule-card > p, .absence-card > p { margin: 0 0 13px; color: #89939c; font-size: 8px; }.schedule-row { min-height: 47px; display: grid; grid-template-columns: 1.2fr 1fr 130px; align-items: center; gap: 12px; border-top: 1px solid #edf0f1; color: #526474; font-size: 9px; }.schedule-row label { display: flex; align-items: center; gap: 6px; color: #6d7b87; font-size: 8px; }.schedule-row.day-off { color: #8b969f; }.absence-card article { min-height: 55px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #edf0f1; }.absence-card article > div { flex: 1; display: grid; gap: 3px; }.absence-card article small { color: #89949d; font-size: 8px; }.absence-card > .secondary-button { margin-top: 14px; }
 
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+
+/* V2 is now the live application shell. The operational views keep their tested
+   markup while the navigation, typography and brand hierarchy use the new design. */
+.live-design { min-height: 100vh; display: block; color: #15233a; background: #f7f9fc; font-family: var(--font-geist-sans), Arial, sans-serif; }
+.live-topbar { position: sticky; z-index: 60; top: 0; height: 72px; padding: 0 30px; display: flex; align-items: stretch; gap: 20px; border-bottom: 1px solid #e1e7ee; background: rgba(255,255,255,.97); box-shadow: 0 2px 10px rgba(25,49,74,.05); backdrop-filter: blur(14px); }
+.live-brand { width: 190px; flex: 0 0 190px; padding: 10px 0; display: flex; align-items: center; border: 0; background: transparent; cursor: pointer; }
+.live-brand img { width: 100%; height: 48px; object-fit: contain; object-position: left center; border-radius: 7px; background: #050505; }
+.live-navigation { min-width: 0; height: 100%; display: flex; align-items: stretch; gap: 1px; }
+.live-navigation > button { position: relative; min-width: 0; padding: 0 11px; display: flex; align-items: center; gap: 6px; border: 0; color: #5b6a7d; background: transparent; font-size: 11px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.live-navigation > button:hover { color: #302800; background: #fffdf1; }
+.live-navigation > button.active { color: #2b2500; font-weight: 750; }
+.live-navigation > button.active::after { content: ""; position: absolute; right: 9px; bottom: 0; left: 9px; height: 3px; border-radius: 3px 3px 0 0; background: var(--mb-yellow); }
+.live-navigation em { min-width: 17px; height: 17px; padding: 0 4px; display: grid; place-items: center; border-radius: 5px; color: #5d4b00; background: #fff3ad; font-size: 8px; font-style: normal; font-weight: 800; }
+.live-actions { position: relative; margin-left: auto; display: flex; align-items: center; gap: 7px; }
+.live-location { margin-right: 4px; padding-right: 12px; border-right: 1px solid #e4e9ef; color: #7b8797; font-size: 10px; font-weight: 650; }
+.live-profile { height: 38px; padding: 0 4px 0 6px; display: flex; align-items: center; gap: 7px; border: 0; border-radius: 8px; color: #3b4c62; background: transparent; cursor: pointer; }
+.live-profile:hover { background: #f6f8fb; }
+.live-profile > span { width: 29px; height: 29px; display: grid; place-items: center; border-radius: 50%; color: #463800; background: #fff4b9; font-size: 9px; font-weight: 800; }
+.live-profile b { font-size: 11px; }
+.live-profile-menu { position: absolute; z-index: 80; top: 58px; right: 0; width: 140px; padding: 6px; border: 1px solid #e1e7ee; border-radius: 9px; background: #fff; box-shadow: 0 12px 30px rgba(20,40,59,.14); }
+.live-profile-menu button { width: 100%; min-height: 32px; padding: 0 10px; border: 0; border-radius: 6px; color: #b42318; background: transparent; text-align: left; font-size: 10px; cursor: pointer; }
+.live-profile-menu button:hover { background: #fff2f0; }
+.live-menu-button, .live-mobile-nav { display: none; }
+.live-main { width: 100%; min-width: 0; }
+.live-design .workspace { max-width: 1510px; padding-top: 27px; }
+.live-design .page-heading h1 { color: #122139; font-family: "Arial Narrow", var(--font-montserrat), sans-serif; font-size: clamp(28px,2.5vw,35px); letter-spacing: -1.1px; }
+.live-design .eyebrow { color: #937111 !important; }
+.live-design .primary-button:hover { color: var(--mb-black); background: #ffdf3d; }
+.live-design .week-capacity, .live-design .booking-list-card, .live-design .available-card, .live-design .module-summary, .live-design .customer-card, .live-design .hours-card, .live-design .closure-card { border-color: #e1e7ee; box-shadow: 0 4px 18px rgba(21,51,86,.035); }
+.live-design .week-identity { color: #171717; background: var(--mb-yellow); }
+.live-design .capacity-days > button.selected-day { outline-color: var(--mb-yellow); box-shadow: 0 4px 13px rgba(25,49,74,.07); }
+.live-design .customer-filters button.selected span { color: #241d00; background: var(--mb-yellow); }
+
+@media (max-width: 1240px) {
+  .live-topbar { gap: 10px; padding-inline: 20px; }
+  .live-brand { width: 160px; flex-basis: 160px; }
+  .live-navigation > button { padding-inline: 8px; font-size: 10px; }
+  .live-location { display: none; }
+}
+
+@media (max-width: 980px) {
+  .live-navigation > button { width: 43px; justify-content: center; padding: 0; }
+  .live-navigation > button span, .live-navigation > button em { display: none; }
+  .live-navigation > button.active::after { right: 6px; left: 6px; }
+}
+
+@media (max-width: 760px) {
+  .live-topbar { height: 62px; padding: 0 14px; align-items: center; }
+  .live-menu-button { width: 38px; height: 38px; display: grid; place-items: center; flex: 0 0 38px; border: 0; border-radius: 8px; color: #53647a; background: #f6f8fa; }
+  .live-brand { width: 145px; height: 62px; flex-basis: 145px; padding: 7px 0; }
+  .live-brand img { height: 45px; }
+  .live-navigation, .live-location, .live-actions > .icon-button, .live-profile b, .live-profile svg { display: none; }
+  .live-actions { margin-left: auto; }
+  .live-profile { padding: 0; }
+  .live-scrim { display: block; }
+  .live-mobile-nav { position: fixed; z-index: 90; inset: 0 auto 0 0; width: min(310px,86vw); padding: 14px; display: block; color: #f3f4f6; background: #151719; box-shadow: 18px 0 45px rgba(4,10,16,.24); }
+  .live-mobile-nav > div { height: 58px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,.1); }
+  .live-mobile-nav img { width: 175px; height: 47px; object-fit: contain; border-radius: 6px; background: #050505; }
+  .live-mobile-nav > div button { width: 36px; height: 36px; display: grid; place-items: center; border: 0; color: #fff; background: transparent; }
+  .live-mobile-nav nav { padding-top: 14px; display: grid; gap: 4px; }
+  .live-mobile-nav nav button { position: relative; min-height: 45px; padding: 0 12px; display: flex; align-items: center; gap: 12px; border: 0; border-radius: 8px; color: #b6c0ca; background: transparent; text-align: left; font-size: 12px; cursor: pointer; }
+  .live-mobile-nav nav button.active { color: #fff; background: rgba(255,212,0,.12); }
+  .live-mobile-nav nav button.active::before { content: ""; position: absolute; top: 9px; bottom: 9px; left: 0; width: 3px; border-radius: 3px; background: var(--mb-yellow); }
+  .live-design .workspace { padding-top: 20px; }
+}

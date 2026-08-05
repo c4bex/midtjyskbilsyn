@@ -11,7 +11,6 @@ import {
   ChevronRight,
   Clock3,
   FileText,
-  MessageSquare,
   Menu,
   MoreHorizontal,
   Plus,
@@ -24,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import { AvailabilityView } from "./availability-view";
 import { CustomersView } from "./customers-view";
 import { SmsSettingsView } from "./sms-settings-view";
@@ -52,9 +52,16 @@ type WeekDay = { date: string; weekday: number; closed: boolean; totalSlots: num
 type SmsTemplate = "booking_confirmation" | "booking_reminder" | "booking_changed" | "booking_cancelled";
 
 const nav = [
-  { id: "bookings", label: "Dagens bookinger", icon: CalendarDays },
-  { id: "customers", label: "Kunder & køretøjer", icon: Users },
+  { id: "bookings", label: "Bookinger", icon: CalendarDays },
+  { id: "customers", label: "Kunder", icon: Users },
   { id: "invoices", label: "Fakturering", icon: FileText, badge: "4" },
+];
+
+const administrationNav = [
+  { id: "employees", label: "Medarbejdere", icon: ShieldCheck },
+  { id: "availability", label: "Planlægning", icon: Clock3 },
+  { id: "drift", label: "Drift", icon: CheckCircle2 },
+  { id: "sms", label: "Indstillinger", icon: Settings },
 ];
 
 const initialBookings: Booking[] = [
@@ -309,49 +316,37 @@ export function Dashboard() {
   };
 
   return (
-    <div className="app-shell">
-      <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
-        <div className="brand">
-          <div className="brand-logo"><img src="/midtjysk-bilsyn-logo.png" alt="Midtjysk Bilsyn" /></div>
-          <button className="mobile-close" aria-label="Luk menu" onClick={() => setMenuOpen(false)}><X size={20} /></button>
-        </div>
-        <nav aria-label="Primær navigation">
-          <p className="nav-label">Drift</p>
-          {nav.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button key={item.label} className={`nav-item ${activeView === item.id ? "active" : ""}`} onClick={() => navigate(item.id)}>
-                <Icon size={19} strokeWidth={1.8} /><span>{item.label}</span>{item.badge && <em>{item.badge}</em>}
-              </button>
-            );
-          })}
-          <p className="nav-label nav-section">Administration</p>
-          <button className={`nav-item ${activeView === "employees" ? "active" : ""}`} onClick={() => navigate("employees")}><ShieldCheck size={19} strokeWidth={1.8} /><span>Medarbejdere</span></button>
-          <button className={`nav-item ${activeView === "availability" ? "active" : ""}`} onClick={() => navigate("availability")}><Settings size={19} strokeWidth={1.8} /><span>Åbningstider</span></button>
-          <button className={`nav-item ${activeView === "drift" ? "active" : ""}`} onClick={() => navigate("drift")}><CheckCircle2 size={19} strokeWidth={1.8} /><span>Driftsoverblik</span></button>
-          <button className={`nav-item ${activeView === "sms" ? "active" : ""}`} onClick={() => navigate("sms")}><MessageSquare size={19} strokeWidth={1.8} /><span>SMS-indstillinger</span></button>
-        </nav>
-        <div className="sidebar-status">
-          <div className="status-line"><i /><span>Systemet kører normalt</span></div>
-          <small>Senest kontrolleret 10:58</small>
-        </div>
-        <button className="profile" aria-label="Profil" onClick={() => setProfileOpen((open) => !open)}>
-          <span className="avatar">RM</span><span><strong>Rasmus M.</strong><small>Administrator</small></span><ChevronDown size={16} />
+    <div className="app-shell live-design">
+      <header className="live-topbar">
+        <button className="live-menu-button" aria-label="Åbn menu" onClick={() => setMenuOpen(true)}><Menu size={21} /></button>
+        <button className="live-brand" onClick={() => navigate("bookings")} aria-label="Gå til bookingoverblikket">
+          <Image src="/midtjysk-bilsyn-logo.png" alt="Midtjysk Bilsyn" width={190} height={48} priority />
         </button>
-        {profileOpen && <div className="profile-menu"><button onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}>Log ud</button></div>}
-      </aside>
+        <nav className="live-navigation" aria-label="Primær navigation">
+          {[...nav, ...administrationNav].map((item) => {
+            const Icon = item.icon;
+            return <button key={item.id} className={activeView === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon size={16} strokeWidth={1.8} /><span>{item.label}</span>{"badge" in item && item.badge && <em>{item.badge}</em>}</button>;
+          })}
+        </nav>
+        <div className="live-actions">
+          <span className="live-location">Ikast</span>
+          <button className="icon-button notification" aria-label="Notifikationer" onClick={() => flash("Du har 2 nye driftsbeskeder")}><Bell size={18} /><i /></button>
+          <button className="live-profile" aria-label="Profil" onClick={() => setProfileOpen((open) => !open)}><span>RM</span><b>Rasmus</b><ChevronDown size={14} /></button>
+          {profileOpen && <div className="live-profile-menu"><button onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}>Log ud</button></div>}
+        </div>
+      </header>
 
-      {menuOpen && <button className="scrim" aria-label="Luk menu" onClick={() => setMenuOpen(false)} />}
+      {menuOpen && <>
+        <button className="scrim live-scrim" aria-label="Luk menu" onClick={() => setMenuOpen(false)} />
+        <aside className="live-mobile-nav">
+          <div><Image src="/midtjysk-bilsyn-logo.png" alt="Midtjysk Bilsyn" width={175} height={47} /><button aria-label="Luk menu" onClick={() => setMenuOpen(false)}><X size={20} /></button></div>
+          <nav aria-label="Mobilnavigation">
+            {[...nav, ...administrationNav].map((item) => { const Icon = item.icon; return <button key={item.id} className={activeView === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon size={18} /><span>{item.label}</span></button>; })}
+          </nav>
+        </aside>
+      </>}
 
-      <main>
-        <header className="topbar">
-          <button className="menu-button" aria-label="Åbn menu" onClick={() => setMenuOpen(true)}><Menu size={22} /></button>
-          <div className="location"><span>Ikast</span></div>
-          <div className="top-actions">
-            <button className="icon-button" aria-label="Søg"><Search size={19} /></button>
-            <button className="icon-button notification" aria-label="Notifikationer" onClick={() => flash("Du har 2 nye driftsbeskeder")}><Bell size={19} /><i /></button>
-          </div>
-        </header>
+      <main className="live-main">
 
         <div className="workspace">
           {activeView === "customers" ? <CustomersView onNotify={flash} /> : activeView === "availability" ? <AvailabilityView onNotify={flash} /> : activeView === "sms" ? <SmsSettingsView onNotify={flash} /> : activeView === "invoices" ? <InvoiceView onNotify={flash} /> : activeView === "employees" ? <EmployeesView onNotify={flash} /> : activeView === "drift" ? <DriftView /> : <>
