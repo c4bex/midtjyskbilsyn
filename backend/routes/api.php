@@ -15,6 +15,11 @@ Route::middleware('web')->group(function () {
     Route::get('/session', function () {
         return response()->json(['authenticated' => Auth::check(), 'user' => Auth::user()?->only(['id', 'name', 'email'])]);
     });
+    Route::get('/session/employee', function () {
+        if (!Auth::check()) return response()->json(['authenticated' => false], 401);
+        $employee = DB::table('employees')->where('user_id', Auth::id())->first(['id', 'display_name as displayName', 'role', 'active']);
+        return response()->json(['authenticated' => true, 'employee' => $employee]);
+    });
     Route::post('/logout', function () {
         Auth::logout();
         request()->session()->invalidate();
