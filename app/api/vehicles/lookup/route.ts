@@ -34,6 +34,6 @@ export async function GET(request: Request) {
     customer: { id: row.customer_id, name: row.display_name, customerType: row.customer_type },
     lastInspectionDate: row.last_inspection_at ? toDateAndTime(row.last_inspection_at).date : null,
     inspectionDueDate: null,
-    dmr: { enabled: dmrAdapter.enabled, status: "not_connected" },
+    dmr: { enabled: dmrAdapter.enabled, status: dmrAdapter.enabled ? "connected" : "not_connected" },
   });
 }
