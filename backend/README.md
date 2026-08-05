@@ -21,6 +21,21 @@ Laravel is a web application framework with expressive, elegant syntax. We belie
 
 Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
+## Lokal udvikling med MySQL
+
+Backend-projektet er klargjort til MySQL, men er endnu ikke forbundet til produktionsdata.
+Brug kun en lokal udviklingsdatabase under denne fase:
+
+```bash
+cp .env.example .env
+php artisan key:generate
+php artisan migrate
+```
+
+Sæt derefter `DB_DATABASE`, `DB_USERNAME` og `DB_PASSWORD` i den lokale `.env` til den
+MySQL-database, der er oprettet til projektet. Produktionsdatabasen og ARVO berøres ikke.
+Migrationen opretter grundtabeller for kunder, køretøjer, bookinger og revisionsspor.
+
 ## Learning Laravel
 
 Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
