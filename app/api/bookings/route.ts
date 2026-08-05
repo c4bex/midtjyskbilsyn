@@ -45,6 +45,25 @@ async function availabilityFor(date: string, rows: BookingRow[]) {
 
 export async function GET(request: Request) {
   if (!await authorizeBookingRequest(request)) return unauthorizedResponse();
+  const laravelBaseUrl = process.env.LARAVEL_API_BASE_URL?.replace(/\/$/, "");
+  if (process.env.USE_LARAVEL_BOOKING_API === "true" && laravelBaseUrl) {
+    const date = new URL(request.url).searchParams.get("date") ?? "2026-08-04";
+    try {
+      const response = await fetch(`${laravelBaseUrl}/api/bookings?date=${encodeURIComponent(date)}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Laravel booking API unavailable");
+      const payload = await response.json() as { bookings?: Array<{ id: number | string; starts_at: string; customer_name: string | null; customer_type: "private" | "business"; registration_normalized: string; make: string | null; model: string | null; inspection_type: string; status: BookingRecord["status"] }> };
+      return Response.json({
+        bookings: (payload.bookings ?? []).map((row) => {
+          const startsAt = new Date(row.starts_at.replace(" ", "T") + "Z");
+          return { id: String(row.id), date, time: startsAt.toISOString().slice(11, 16), customer: row.customer_name ?? "Ukendt kunde", customerType: row.customer_type, plate: formatPlate(row.registration_normalized), vehicle: [row.make, row.model].filter(Boolean).join(" "), inspection: row.inspection_type, status: row.status };
+        }),
+        availableSlots: [],
+        source: "laravel-mysql",
+      });
+    } catch {
+      return Response.json({ error: "Laravel booking API er midlertidigt utilgængelig" }, { status: 503 });
+    }
+  }
   await ensureBookingDatabase();
   const date = new URL(request.url).searchParams.get("date") ?? "2026-08-04";
   if (!validDate(date)) return Response.json({ error: "Ugyldig dato" }, { status: 400 });
