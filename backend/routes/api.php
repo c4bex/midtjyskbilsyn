@@ -60,12 +60,12 @@ Route::post('/bookings', function () {
     $vehicleId = DB::table('vehicles')->insertGetId(['customer_id' => $customerId, 'registration_normalized' => $registration, 'make' => $input['make'] ?? null, 'model' => $input['model'] ?? null, 'created_at' => now(), 'updated_at' => now()]);
     $bookingId = DB::table('bookings')->insertGetId(['customer_id' => $customerId, 'vehicle_id' => $vehicleId, 'starts_at' => $startsAt, 'ends_at' => date('Y-m-d H:i:s', strtotime($startsAt.' +20 minutes')), 'inspection_type' => $input['inspectionType'], 'status' => 'confirmed', 'source' => 'manual', 'created_at' => now(), 'updated_at' => now()]);
     return response()->json(['booking' => ['id' => $bookingId]], 201);
-});
+})->middleware('permission:bookings.write');
 
 Route::delete('/bookings/{booking}', function (int $booking) {
     $updated = DB::table('bookings')->where('id', $booking)->update(['status' => 'cancelled', 'updated_at' => now()]);
     return $updated ? response()->json(['ok' => true]) : response()->json(['error' => 'Bookingen findes ikke'], 404);
-});
+})->middleware('permission:bookings.write');
 
 Route::get('/customers', function () {
     $customers = DB::table('customers')->orderBy('display_name')->get([
