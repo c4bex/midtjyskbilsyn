@@ -89,4 +89,14 @@ Route::get('/vehicles/lookup', function () {
     ], 'customer' => $vehicle->display_name ? ['name' => $vehicle->display_name, 'customerType' => $vehicle->customer_type] : null]);
 });
 
+Route::get('/imports', function () {
+    $events = DB::table('audit_events')->where('entity_type', 'vehicle_import_batch')->latest()->limit(50)->get([
+        'entity_id as batch_id', 'action', 'actor_id', 'after_json', 'created_at',
+    ]);
+    return response()->json(['imports' => $events->map(function ($event) {
+        $meta = json_decode((string) $event->after_json, true) ?: [];
+        return ['batchId' => $event->batch_id, 'status' => 'completed', 'rows' => $meta['rows'] ?? 0, 'source' => $meta['source'] ?? 'unknown', 'createdAt' => $event->created_at];
+    })]);
+});
+
 });
