@@ -113,4 +113,15 @@ Route::get('/access/roles', function () {
     ]]);
 });
 
+Route::get('/access/check', function () {
+    $role = (string) env('BOOKING_API_ROLE', 'Teknisk ansvarlig / Ejer');
+    $permission = (string) request('permission', 'bookings.read');
+    $roles = [
+        'Teknisk ansvarlig / Ejer' => ['bookings.read', 'bookings.write', 'customers.write', 'imports.write', 'invoices.write', 'employees.write', 'settings.write'],
+        'Synsinspektør' => ['bookings.read', 'bookings.write', 'customers.write'],
+        'Bogholder / blæksprut' => ['bookings.read', 'customers.read', 'invoices.write'],
+    ];
+    return response()->json(['role' => $role, 'permission' => $permission, 'allowed' => in_array($permission, $roles[$role] ?? [], true)]);
+});
+
 });
