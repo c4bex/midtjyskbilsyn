@@ -10,6 +10,39 @@ type VehicleRow = {
   last_inspection_at: number | null;
 };
 
+async function lookupOnNas(registration: string): Promise<Response | null> {
+  if (!dmrAdapter.enabled) return null;
+
+  try {
+    const dmr = await lookupDmrVehicle(registration);
+    if (dmr.found && dmr.vehicle) {
+      return Response.json({
+        found: true,
+        source: "dmr-nas",
+        registration: formatPlate(registration),
+        vehicle: dmr.vehicle,
+        lastInspectionDate: dmr.vehicle.lastInspectionDate ?? dmr.vehicle.inspectionDate ?? null,
+        inspectionDueDate: dmr.vehicle.inspectionDueDate ?? null,
+        dmr: { enabled: true, status: "connected", dataVersion: dmr.dataVersion ?? null },
+      });
+    }
+
+    return Response.json({
+      found: false,
+      registration: formatPlate(registration),
+      source: "dmr-nas",
+      dmr: { enabled: true, status: "connected", dataVersion: dmr.dataVersion ?? null },
+    });
+  } catch {
+    return Response.json({
+      found: false,
+      registration: formatPlate(registration),
+      source: "dmr-nas",
+      dmr: { enabled: true, status: "temporarily_unavailable" },
+    });
+  }
+}
+
 export async function GET(request: Request) {
   if (!await authorizeBookingRequest(request)) return unauthorizedResponse();
   const registration = normalizePlate(new URL(request.url).searchParams.get("plate") ?? "");
@@ -20,8 +53,13 @@ export async function GET(request: Request) {
       const response = await fetch(`${laravelBaseUrl}/api/vehicles/lookup?registration=${encodeURIComponent(registration)}`, { cache: "no-store" });
       if (!response.ok) throw new Error("Laravel vehicle API unavailable");
       const data = await response.json() as { found: boolean; vehicle?: { registration: string; make: string | null; model: string | null }; customer?: { name: string; customerType: "private" | "business" } };
-      return Response.json({ ...data, source: data.found ? "local-mysql" : "none", registration: formatPlate(registration), dmr: { enabled: dmrAdapter.enabled, status: dmrAdapter.enabled ? "connected" : "not_connected" } });
-    } catch { return Response.json({ found: false, registration: formatPlate(registration), source: "local-mysql", dmr: { enabled: dmrAdapter.enabled, status: "temporarily_unavailable" } }); }
+      if (data.found) return Response.json({ ...data, source: "local-mysql", registration: formatPlate(registration), dmr: { enabled: dmrAdapter.enabled, status: dmrAdapter.enabled ? "connected" : "not_connected" } });
+      const dmrResponse = await lookupOnNas(registration);
+      return dmrResponse ?? Response.json({ ...data, source: "none", registration: formatPlate(registration), dmr: { enabled: false, status: "not_connected" } });
+    } catch {
+      const dmrResponse = await lookupOnNas(registration);
+      return dmrResponse ?? Response.json({ found: false, registration: formatPlate(registration), source: "local-mysql", dmr: { enabled: false, status: "temporarily_unavailable" } });
+    }
   }
   await ensureBookingDatabase();
   const row = await getD1().prepare(`SELECT v.id AS vehicle_id, v.registration_normalized, v.make, v.model,
@@ -33,7 +71,8 @@ export async function GET(request: Request) {
     GROUP BY v.id, c.id`).bind(registration).first<VehicleRow>();
 
   if (!row) {
-    if (dmrAdapter.enabled) { try { const dmr = await lookupDmrVehicle(registration); if (dmr.found && dmr.vehicle) return Response.json({ found: true, source: "dmr-nas", registration: formatPlate(registration), vehicle: dmr.vehicle, lastInspectionDate: dmr.vehicle.inspectionDate, inspectionDueDate: null, dmr: { enabled: true, status: "connected", dataVersion: dmr.dataVersion } }); return Response.json({ found: false, registration: formatPlate(registration), source: "dmr-nas", dmr: { enabled: true, status: "connected", dataVersion: dmr.dataVersion } }); } catch { return Response.json({ found: false, registration: formatPlate(registration), source: "dmr-nas", dmr: { enabled: true, status: "temporarily_unavailable" } }); } }
+    const dmrResponse = await lookupOnNas(registration);
+    if (dmrResponse) return dmrResponse;
     return Response.json({ found: false, registration: formatPlate(registration), source: "none", dmr: { enabled: dmrAdapter.enabled, status: "not_connected" } });
   }
   return Response.json({

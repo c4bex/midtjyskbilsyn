@@ -108,3 +108,14 @@ test("integrationsadaptere er deaktiverede som standard", async () => {
   await assert.rejects(() => dineroAdapter.execute({ idempotencyKey: "invoice:demo-1", correlationId: "test-1", payload: { invoiceId: "demo-1", bookingId: "booking-1", amountOere: 59500, currency: "DKK" } }), /ikke aktiveret/i);
   await assert.rejects(() => gatewayApiAdapter.execute({ idempotencyKey: "sms:demo-1", correlationId: "test-1", payload: { recipient: "+4520123456", message: "Test", sender: "MB Bilsyn" } }), /ikke aktiveret/i);
 });
+
+test("DMR-opslag normaliserer nummerplader og bruges som fallback efter MySQL", async () => {
+  const { normalizeDmrRegistration } = await import("../lib/integrations/adapters/dmr.ts");
+  const route = await readFile(new URL("../app/api/vehicles/lookup/route.ts", import.meta.url), "utf8");
+  assert.equal(normalizeDmrRegistration("en 48-111"), "EN48111");
+  assert.equal(normalizeDmrRegistration("dv 50 040"), "DV50040");
+  assert.match(route, /async function lookupOnNas/);
+  assert.match(route, /if \(data\.found\)/);
+  assert.match(route, /const dmrResponse = await lookupOnNas\(registration\)/);
+  assert.match(route, /lastInspectionDate.*inspectionDate/);
+});
