@@ -4,6 +4,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Validator;
 
+Route::middleware('api.token')->group(function () {
+
 Route::get('/health', function () {
     try {
         DB::connection()->getPdo();
@@ -85,4 +87,6 @@ Route::get('/vehicles/lookup', function () {
         'make' => $vehicle->make,
         'model' => $vehicle->model,
     ], 'customer' => $vehicle->display_name ? ['name' => $vehicle->display_name, 'customerType' => $vehicle->customer_type] : null]);
+});
+
 });
