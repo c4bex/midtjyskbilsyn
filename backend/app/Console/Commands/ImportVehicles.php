@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class ImportVehicles extends Command
 {
@@ -25,14 +26,25 @@ class ImportVehicles extends Command
         $this->info(count($valid).' unikke rækker er klar.');
         if (!$this->option('write')) { $this->comment('Forhåndsvisning: ingen data er skrevet. Brug --write efter godkendelse.'); return self::SUCCESS; }
         if (!$this->confirm('Skriv disse data til den lokale MySQL-database?', false)) return self::SUCCESS;
-        DB::transaction(function () use ($valid): void {
+        $batchId = (string) Str::uuid();
+        DB::transaction(function () use ($valid, $batchId): void {
             foreach ($valid as $item) {
                 $customerId = DB::table('customers')->where('display_name', $item['name'])->value('id');
                 if (!$customerId) $customerId = DB::table('customers')->insertGetId(['display_name' => $item['name'], 'customer_type' => $item['type'], 'created_at' => now(), 'updated_at' => now()]);
                 DB::table('vehicles')->updateOrInsert(['registration_normalized' => $item['plate']], ['customer_id' => $customerId, 'make' => $item['make'], 'model' => $item['model'], 'created_at' => now(), 'updated_at' => now()]);
             }
+            DB::table('audit_events')->insert([
+                'action' => 'data.imported',
+                'entity_type' => 'vehicle_import_batch',
+                'entity_id' => $batchId,
+                'actor_id' => 'local-operator',
+                'before_json' => null,
+                'after_json' => json_encode(['rows' => count($valid), 'source' => 'vehicle-import']),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
         });
-        $this->info('Import gennemført i én transaktion.');
+        $this->info('Import gennemført i én transaktion. Batch: '.$batchId);
         return self::SUCCESS;
     }
 }
