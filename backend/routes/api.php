@@ -64,3 +64,25 @@ Route::delete('/bookings/{booking}', function (int $booking) {
     $updated = DB::table('bookings')->where('id', $booking)->update(['status' => 'cancelled', 'updated_at' => now()]);
     return $updated ? response()->json(['ok' => true]) : response()->json(['error' => 'Bookingen findes ikke'], 404);
 });
+
+Route::get('/customers', function () {
+    $customers = DB::table('customers')->orderBy('display_name')->get([
+        'id', 'display_name as name', 'customer_type', 'external_reference',
+    ]);
+    return response()->json(['customers' => $customers]);
+});
+
+Route::get('/vehicles/lookup', function () {
+    $registration = strtoupper(preg_replace('/[^A-ZÆØÅ0-9]/u', '', (string) request('registration')));
+    if ($registration === '') return response()->json(['found' => false], 400);
+    $vehicle = DB::table('vehicles')
+        ->leftJoin('customers', 'customers.id', '=', 'vehicles.customer_id')
+        ->where('vehicles.registration_normalized', $registration)
+        ->first(['vehicles.registration_normalized', 'vehicles.make', 'vehicles.model', 'customers.display_name', 'customers.customer_type']);
+    if (!$vehicle) return response()->json(['found' => false]);
+    return response()->json(['found' => true, 'source' => 'local-mysql', 'vehicle' => [
+        'registration' => $vehicle->registration_normalized,
+        'make' => $vehicle->make,
+        'model' => $vehicle->model,
+    ], 'customer' => $vehicle->display_name ? ['name' => $vehicle->display_name, 'customerType' => $vehicle->customer_type] : null]);
+});
