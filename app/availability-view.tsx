@@ -11,14 +11,15 @@ type PlanningBuffer = { id: number; date: string; starts_at: string; ends_at: st
 type PlanningData = { inspectionTypes: InspectionType[]; profiles: CalendarProfile[]; buffers: PlanningBuffer[]; day: { profileId: number | null; conflictStatus: "ok" | "warning" | "red"; staffedInspectors: number; capacityPerSlot: number; bufferCount: number; availableCapacity: number } };
 const names = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag", "Søndag"];
 const blankDays = names.map((name, index) => ({ weekday: index + 1, name, closed: index > 4, startsAt: "08:00", endsAt: "16:20", breakStartsAt: "12:20", breakEndsAt: "13:00" }));
+const currentDate = new Date().toISOString().slice(0, 10);
 const danishDate = (date: string) => new Intl.DateTimeFormat("da-DK", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Copenhagen" }).format(new Date(`${date}T12:00:00Z`));
 
 export function AvailabilityView({ onNotify }: { onNotify: (message: string) => void }) {
   const [days, setDays] = useState<Day[]>(blankDays);
   const [closures, setClosures] = useState<Rule[]>([]);
   const [savingDay, setSavingDay] = useState<number | null>(null);
-  const [closureForm, setClosureForm] = useState({ kind: "vacation" as "vacation" | "holiday", dateFrom: "2026-08-10", dateTo: "2026-08-14", label: "Sommerferie" });
-  const [planningDate, setPlanningDate] = useState("2026-08-04");
+  const [closureForm, setClosureForm] = useState({ kind: "vacation" as "vacation" | "holiday", dateFrom: currentDate, dateTo: currentDate, label: "Sommerferie" });
+  const [planningDate, setPlanningDate] = useState(currentDate);
   const [planning, setPlanning] = useState<PlanningData | null>(null);
   const [planningProfile, setPlanningProfile] = useState("");
   const [bufferForm, setBufferForm] = useState({ startsAt: "10:00", endsAt: "10:20", reason: "Ekstra luft i kalenderen" });
