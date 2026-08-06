@@ -61,8 +61,7 @@ export default function LoginPage() {
           <img src="/midtjysk-bilsyn-logo.png" alt="Midtjysk Bilsyn" />
         </Link>
         <div className="login-hero-copy">
-          <p className="login-kicker">MIDTJYSK BILSYN</p>
-          <h1>Velkommen til<br /><span>Midtjysk Bilsyn Platform</span></h1>
+          <h1>Velkommen til<br /><span>platformen</span></h1>
           <div className="login-rule" />
           <p className="login-intro">Din digitale platform til booking, planlægning og overblik over dine kunder og aktiviteter.</p>
         </div>
@@ -80,9 +79,8 @@ export default function LoginPage() {
       <section className="login-panel">
         <form className="login-card" onSubmit={submit}>
           <div className="login-card-brand"><img src="/midtjysk-bilsyn-logo.png" alt="Midtjysk Bilsyn" /></div>
-          <p className="login-card-kicker">SIKKER ADGANG</p>
           <h2>Log ind</h2>
-          <p className="login-card-intro">Adgang til Midtjysk Bilsyns bookingsystem</p>
+          <p className="login-card-intro">Log ind for at fortsætte</p>
 
           <label className="login-field">
             <span>E-mail</span>
