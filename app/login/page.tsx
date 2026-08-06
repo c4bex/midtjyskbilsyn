@@ -28,6 +28,8 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -54,6 +56,15 @@ export default function LoginPage() {
     }
   };
 
+  const submitForgot = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); setLoading(true); setError("");
+    try {
+      const response = await fetch("/api/auth/forgot-password", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email }) });
+      if (!response.ok) throw new Error();
+      setForgotSent(true);
+    } catch { setError("Kunne ikke sende forespørgslen lige nu. Prøv igen om et øjeblik."); } finally { setLoading(false); }
+  };
+
   return (
     <main className="login-page">
       <section className="login-hero" aria-label="Om Midtjysk Bilsyn">
@@ -77,10 +88,10 @@ export default function LoginPage() {
       </section>
 
       <section className="login-panel">
-        <form className="login-card" onSubmit={submit}>
+        <form className="login-card" onSubmit={forgotMode ? submitForgot : submit}>
           <div className="login-card-brand"><img src="/midtjysk-bilsyn-logo.png" alt="Midtjysk Bilsyn" /></div>
           <h2>Log ind</h2>
-          <p className="login-card-intro">Log ind for at fortsætte</p>
+          <p className="login-card-intro">{forgotMode ? "Indtast din e-mail, så sender vi et sikkert nulstillingslink." : "Log ind for at fortsætte"}</p>
 
           <label className="login-field">
             <span>E-mail</span>
@@ -89,7 +100,7 @@ export default function LoginPage() {
               <input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Indtast din e-mail" autoComplete="email" aria-invalid={Boolean(error)} />
             </span>
           </label>
-          <label className="login-field">
+          {!forgotMode && <label className="login-field">
             <span>Adgangskode</span>
             <span className="login-input-wrap">
               <LockKeyhole className="login-field-icon" size={18} aria-hidden="true" />
@@ -98,14 +109,16 @@ export default function LoginPage() {
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </span>
-          </label>
+          </label>}
 
-          <div className="login-options">
+          {!forgotMode && <div className="login-options">
             <label className="login-checkbox"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /><span>Husk mig</span></label>
-            <button className="login-forgot" type="button" onClick={() => setError("Kontakt systemadministratoren for at nulstille adgangskoden.")}>Glemt adgangskode?</button>
-          </div>
+            <button className="login-forgot" type="button" onClick={() => { setForgotMode(true); setForgotSent(false); setError(""); }}>Glemt adgangskode?</button>
+          </div>}
+          {forgotMode && forgotSent && <p className="login-success" role="status">Hvis kontoen findes, er der sendt et nulstillingslink til din e-mail.</p>}
+          {forgotMode && <button className="login-forgot login-back" type="button" onClick={() => { setForgotMode(false); setForgotSent(false); setError(""); }}>Tilbage til login</button>}
           {error && <p className="login-error" role="alert">{error}</p>}
-          <button className="login-submit" type="submit" disabled={loading}>{loading ? "Logger ind…" : <>Log ind <ArrowRight size={19} /></>}</button>
+          {!forgotSent && <button className="login-submit" type="submit" disabled={loading}>{loading ? (forgotMode ? "Sender…" : "Logger ind…") : <>{forgotMode ? "Send nulstillingslink" : "Log ind"} <ArrowRight size={19} /></>}</button>}
         </form>
       </section>
     </main>

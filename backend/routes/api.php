@@ -27,6 +27,8 @@ Route::middleware('web')->group(function () use ($sessionPayload) {
         return response()->json($sessionPayload());
     })->middleware('throttle:5,1');
     Route::get('/session', fn () => response()->json(['authenticated' => Auth::check(), ...$sessionPayload()]));
+    Route::post('/forgot-password', [OperationsController::class, 'forgotPassword'])->middleware('throttle:5,1');
+    Route::post('/reset-password', [OperationsController::class, 'resetPassword'])->middleware('throttle:10,1');
     Route::post('/logout', function () {
         Auth::logout();
         request()->session()->invalidate();
@@ -47,6 +49,8 @@ Route::middleware(['web', 'throttle:30,1'])->prefix('public')->group(function ()
 // Ekstern branchekundeportal: separat session, men samme kalender og bookingmotor.
 Route::middleware(['web', 'throttle:60,1'])->prefix('portal')->group(function () {
     Route::post('/login', [OperationsController::class, 'businessPortalLogin'])->middleware('throttle:10,1');
+    Route::post('/forgot-password', [OperationsController::class, 'businessPortalForgotPassword'])->middleware('throttle:5,1');
+    Route::post('/reset-password', [OperationsController::class, 'businessPortalResetPassword'])->middleware('throttle:10,1');
     Route::get('/session', [OperationsController::class, 'businessPortalSession']);
     Route::post('/logout', [OperationsController::class, 'businessPortalLogout']);
     Route::get('/dashboard', [OperationsController::class, 'businessPortalDashboard']);

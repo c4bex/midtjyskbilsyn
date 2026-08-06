@@ -10,12 +10,40 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
 class OperationsController extends Controller
 {
+    private const RESET_MESSAGE = 'Hvis der findes en aktiv konto med de indtastede oplysninger, bliver der sendt en mail med næste trin.';
+
+    public function forgotPassword(Request $request): JsonResponse
+    {
+        $data = $request->validate(['email' => ['required', 'email', 'max:160']]);
+        $user = DB::table('users')->where('email', $data['email'])->first();
+        if ($user) {
+            try {
+                $model = \App\Models\User::find($user->id);
+                $token = Password::broker()->createToken($model);
+                $url = rtrim((string) config('app.url'), '/') . '/login/reset?token=' . urlencode($token) . '&email=' . urlencode($data['email']);
+                Mail::raw("Du har bedt om at nulstille din adgangskode. Åbn linket her (gyldigt i 60 minutter):\n\n{$url}", fn ($mail) => $mail->to($data['email'])->subject('Nulstil adgangskode – Midtjysk Bilsyn'));
+            } catch (\Throwable) { }
+        }
+        return response()->json(['message' => self::RESET_MESSAGE]);
+    }
+
+    public function resetPassword(Request $request): JsonResponse
+    {
+        $data = $request->validate(['email' => ['required', 'email'], 'token' => ['required', 'string'], 'password' => ['required', 'string', 'min:8', 'confirmed']]);
+        $status = Password::reset($data, function ($user, $password) {
+            $user->forceFill(['password' => Hash::make($password), 'remember_token' => Str::random(60)])->save();
+        });
+        if ($status !== Password::PASSWORD_RESET) return response()->json(['error' => 'Linket er udløbet eller ugyldigt. Bed om et nyt link.'], 422);
+        return response()->json(['message' => 'Adgangskoden er ændret. Du kan nu logge ind.']);
+    }
     public function publicConfig(): JsonResponse
     {
         $types = DB::table('inspection_types')->where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'required_slots'])->map(fn ($type) => ['id' => (string) $type->id, 'name' => $type->name, 'requiredSlots' => (int) $type->required_slots]);
@@ -73,6 +101,34 @@ class OperationsController extends Controller
         return response()->json(['authenticated' => true, 'user' => ['id' => (string) $context['user']->id, 'name' => $context['user']->name, 'email' => $context['user']->email, 'role' => $context['user']->role], 'company' => ['id' => (string) $context['customer']->id, 'name' => $context['customer']->display_name], 'settings' => $context['settings']]);
     }
 
+    public function businessPortalForgotPassword(Request $request): JsonResponse
+    {
+        $data = $request->validate(['email' => ['required', 'email', 'max:160']]);
+        $user = DB::table('business_portal_users')->where('email', $data['email'])->where('active', true)->first();
+        if ($user) {
+            try {
+                $token = Str::random(64);
+                DB::table('business_portal_password_resets')->where('user_id', $user->id)->update(['used_at' => now()]);
+                DB::table('business_portal_password_resets')->insert(['user_id' => $user->id, 'token_hash' => hash('sha256', $token), 'expires_at' => now()->addHour(), 'created_at' => now()]);
+                $url = rtrim((string) config('app.url'), '/') . '/branchekunde/reset?token=' . urlencode($token) . '&email=' . urlencode($data['email']);
+                Mail::raw("Du har bedt om at nulstille adgangskoden til branchekundeportalen. Åbn linket her (gyldigt i 60 minutter):\n\n{$url}", fn ($mail) => $mail->to($data['email'])->subject('Nulstil portaladgang – Midtjysk Bilsyn'));
+            } catch (\Throwable) { }
+        }
+        return response()->json(['message' => self::RESET_MESSAGE]);
+    }
+
+    public function businessPortalResetPassword(Request $request): JsonResponse
+    {
+        $data = $request->validate(['email' => ['required', 'email'], 'token' => ['required', 'string'], 'password' => ['required', 'string', 'min:8', 'confirmed']]);
+        $reset = DB::table('business_portal_password_resets')->join('business_portal_users', 'business_portal_users.id', '=', 'business_portal_password_resets.user_id')->where('business_portal_users.email', $data['email'])->whereNull('business_portal_password_resets.used_at')->where('business_portal_password_resets.expires_at', '>', now())->where('business_portal_password_resets.token_hash', hash('sha256', $data['token']))->select('business_portal_password_resets.id', 'business_portal_users.id as user_id')->first();
+        if (! $reset) return response()->json(['error' => 'Linket er udløbet eller ugyldigt. Bed om et nyt link.'], 422);
+        DB::transaction(function () use ($reset, $data) {
+            DB::table('business_portal_users')->where('id', $reset->user_id)->update(['password' => Hash::make($data['password']), 'updated_at' => now()]);
+            DB::table('business_portal_password_resets')->where('id', $reset->id)->update(['used_at' => now()]);
+        });
+        return response()->json(['message' => 'Adgangskoden er ændret. Du kan nu logge ind.']);
+    }
+
     public function businessPortalLogout(Request $request): JsonResponse
     {
         $request->session()->forget('business_portal_user_id');
@@ -120,6 +176,9 @@ class OperationsController extends Controller
         if (! $context) {
             return response()->json(['error' => 'Log ind på branchekundeportalen'], 401);
         }
+        if ($context['user']->role === 'read_only') {
+            return response()->json(['error' => 'Din adgang er kun læsning'], 403);
+        }
         $data = $request->validate(['plate' => ['required', 'string', 'max:12'], 'vehicle' => ['nullable', 'string', 'max:200'], 'date' => ['required', 'date_format:Y-m-d'], 'time' => ['required', 'date_format:H:i'], 'inspection' => ['required', 'string', 'max:80'], 'requisitionNumber' => ['nullable', 'string', 'max:100'], 'contactName' => ['nullable', 'string', 'max:160'], 'customerNote' => ['nullable', 'string', 'max:1000']]);
         $settings = $context['settings'];
         $allowed = $settings->allowed_inspection_types ? json_decode($settings->allowed_inspection_types, true) : [];
@@ -158,6 +217,9 @@ class OperationsController extends Controller
         if (! $context || ! $current) {
             return response()->json(['error' => 'Bookingen findes ikke'], 404);
         }
+        if ($context['user']->role === 'read_only') {
+            return response()->json(['error' => 'Din adgang er kun læsning'], 403);
+        }
         $cutoff = CarbonImmutable::parse($current->starts_at)->subMinutes((int) $context['settings']->change_cutoff_minutes);
         if (now()->gte($cutoff)) {
             return response()->json(['error' => 'Tiden kan ikke ændres så tæt på synet'], 422);
@@ -178,6 +240,9 @@ class OperationsController extends Controller
         $current = $context ? DB::table('bookings')->where('id', $booking)->where('business_customer_id', $context['customer']->id)->first() : null;
         if (! $context || ! $current) {
             return response()->json(['error' => 'Bookingen findes ikke'], 404);
+        }
+        if ($context['user']->role === 'read_only') {
+            return response()->json(['error' => 'Din adgang er kun læsning'], 403);
         }
         $cutoff = CarbonImmutable::parse($current->starts_at)->subMinutes((int) $context['settings']->change_cutoff_minutes);
         if (now()->gte($cutoff)) {
