@@ -30,6 +30,7 @@ x-api-environment: &api-environment
   OPENAI_API_KEY: ${OPENAI_API_KEY:-}
   OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6-sol}
   OPENAI_TIMEOUT_SECONDS: 45
+  AI_TEST_MODE: ${AI_TEST_MODE:-true}
   AI_WEB_SEARCH_ENABLED: ${AI_WEB_SEARCH_ENABLED:-false}
   AI_WEB_ALLOWED_DOMAINS: ${AI_WEB_ALLOWED_DOMAINS:-retsinformation.dk,fstyr.dk,motorst.dk,skat.dk,virk.dk,borger.dk}
   ARVO_ENABLED: ${ARVO_ENABLED:-false}

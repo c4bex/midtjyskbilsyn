@@ -10,7 +10,9 @@ class AiAssistantService
     public function answer(string $question, array $context = [], bool $useWebSearch = false): array
     {
         $sources = $this->findSources($question);
+        $sourceWarnings = $this->sourceWarnings($sources);
         $webSearchEnabled = $useWebSearch
+            && ! (bool) config('services.ai.test_mode', true)
             && (bool) config('services.ai.web_search_enabled')
             && $this->allowedWebDomains() !== [];
         if (! config('services.ai.enabled') || ! config('services.ai.api_key')) {
@@ -22,7 +24,7 @@ class AiAssistantService
                     : "Kort svar\n\nJeg fandt relevante afsnit i dokumentbiblioteket, men AI-modellen er ikke aktiveret endnu. Åbn kilderne nedenfor og vurder dem manuelt; jeg vil ikke gætte på svaret.{$webStatus}\n\nKilder\n\n".$this->sourceList($sources),
                 'confidence' => 'needs_review',
                 'model' => null,
-                'provider_metadata' => ['enabled' => false, 'web_search_requested' => $useWebSearch, 'web_search_used' => false],
+                'provider_metadata' => ['enabled' => false, 'web_search_requested' => $useWebSearch, 'web_search_used' => false, 'source_warnings' => $sourceWarnings],
                 'sources' => $sources,
                 'web_sources' => [],
             ];
@@ -30,7 +32,7 @@ class AiAssistantService
 
         $payload = [
             'model' => config('services.ai.model', 'gpt-5.6-sol'),
-            'instructions' => $this->systemPrompt($sources, $context, $webSearchEnabled),
+            'instructions' => $this->systemPrompt($sources, $context, $webSearchEnabled, $sourceWarnings),
             'input' => $question,
         ];
         if ($webSearchEnabled) {
@@ -63,6 +65,8 @@ class AiAssistantService
                 'response_id' => $response['id'] ?? null,
                 'web_search_requested' => $useWebSearch,
                 'web_search_used' => $webSearchUsed,
+                'source_warnings' => $sourceWarnings,
+                'test_mode' => (bool) config('services.ai.test_mode', true),
             ],
             'sources' => $sources,
             'web_sources' => $webSources,
@@ -82,8 +86,10 @@ class AiAssistantService
 
         $rows = DB::table('ai_document_chunks as c')
             ->join('ai_documents as d', 'd.id', '=', 'c.document_id')
-            ->where('d.status', 'ready')->where('d.is_active', true)
-            ->select('c.id as chunk_id', 'c.document_id', 'c.page_number', 'c.content', 'd.title', 'd.category', 'd.version')
+            ->where('d.status', 'ready')->where('d.approval_status', 'approved')->where('d.is_active', true)
+            ->where(fn ($query) => $query->whereNull('d.valid_from')->orWhere('d.valid_from', '<=', today()))
+            ->where(fn ($query) => $query->whereNull('d.valid_to')->orWhere('d.valid_to', '>=', today()))
+            ->select('c.id as chunk_id', 'c.document_id', 'c.page_number', 'c.content', 'd.title', 'd.category', 'd.version', 'd.valid_to', 'd.approval_status')
             ->orderByDesc('d.updated_at')->limit(600)->get();
         $ranked = [];
         foreach ($rows as $row) {
@@ -93,10 +99,12 @@ class AiAssistantService
                 $score += substr_count($haystack, $term) * (str_contains(mb_strtolower($row->title), $term) ? 3 : 1);
             }
             if ($score > 0) {
+                $categoryWeight = in_array($row->category, ['Lovgivning', 'Bekendtgørelse'], true) ? 2 : 0;
                 $ranked[] = [
                     'chunk_id' => $row->chunk_id, 'document_id' => $row->document_id,
                     'title' => $row->title, 'category' => $row->category, 'version' => $row->version,
-                    'page_number' => $row->page_number, 'content' => $row->content, 'score' => min(1, $score / 12),
+                    'valid_to' => $row->valid_to, 'approval_status' => $row->approval_status,
+                    'page_number' => $row->page_number, 'content' => $row->content, 'score' => min(1, ($score + $categoryWeight) / 12),
                 ];
             }
         }
@@ -105,12 +113,13 @@ class AiAssistantService
         return array_slice($ranked, 0, 6);
     }
 
-    private function systemPrompt(array $sources, array $context, bool $useWebSearch): string
+    private function systemPrompt(array $sources, array $context, bool $useWebSearch, array $warnings): string
     {
         $sourceText = collect($sources)->map(fn ($source, $index) => sprintf(
             "[Kilde %d] %s, side %s\n%s", $index + 1, $source['title'], $source['page_number'] ?? 'ukendt', $source['content']
         ))->implode("\n\n");
         $contextText = $context === [] ? 'Ingen bookingoplysninger er delt.' : json_encode($context, JSON_UNESCAPED_UNICODE);
+        $warningText = $warnings === [] ? 'Ingen automatiske kildeadvarsler.' : implode("\n", $warnings);
 
         $sourceRule = $useWebSearch
             ? 'Brug de medsendte interne dokumenter og den aktiverede søgning i godkendte officielle myndighedskilder. Skeln tydeligt mellem "Virksomhedens dokument" og "Officiel webkilde". Et webfund er ikke automatisk en internt godkendt procedure. Ved modstrid skal forskellen fremhæves.'
@@ -123,6 +132,9 @@ Svar med overskrifterne: Kort svar, Regelgrundlag, Praktisk vurdering, Dokumenta
 
 Bookingkontekst: {$contextText}
 
+Automatiske kildeadvarsler:
+{$warningText}
+
 Kilder:
 {$sourceText}
 PROMPT;
@@ -131,6 +143,25 @@ PROMPT;
     private function sourceList(array $sources): string
     {
         return collect($sources)->map(fn ($s, $i) => sprintf('[Kilde %d] %s, side %s', $i + 1, $s['title'], $s['page_number'] ?? 'ukendt'))->implode("\n");
+    }
+
+    private function sourceWarnings(array $sources): array
+    {
+        $warnings = [];
+        $documents = collect($sources)->unique('document_id');
+        foreach ($documents as $source) {
+            if (! empty($source['valid_to']) && now()->diffInDays($source['valid_to'], false) <= 30) {
+                $warnings[] = sprintf('Kilden "%s" udløber %s.', $source['title'], $source['valid_to']);
+            }
+        }
+        foreach ($documents->groupBy('category') as $category => $group) {
+            $versions = $group->pluck('version')->filter()->unique();
+            if ($group->count() > 1 && $versions->count() > 1) {
+                $warnings[] = sprintf('Flere godkendte versioner i kategorien %s matcher spørgsmålet; kontrollér hvilken der er styrende.', $category);
+            }
+        }
+
+        return array_values(array_unique($warnings));
     }
 
     private function outputText(array $output): string

@@ -35,7 +35,9 @@ class AiAssistantApiTest extends TestCase
         $response = $this->actingAs($this->user)->post('/api/ai/documents', [
             'title' => 'Intern vejledning om omsyn', 'category' => 'Vejledning', 'publisher' => 'Midtjysk Bilsyn',
             'file' => UploadedFile::fake()->createWithContent('omsyn.txt', 'Ved omsyn skal køretøjets tidligere synsrapport kontrolleres før afgørelsen.'),
-        ])->assertCreated()->assertJsonPath('document.status', 'ready');
+        ])->assertCreated()->assertJsonPath('document.status', 'ready')
+            ->assertJsonPath('document.approval_status', 'draft')
+            ->assertJsonPath('document.extraction_method', 'plain_text');
 
         $documentId = $response->json('document.id');
         $this->assertDatabaseHas('ai_document_chunks', ['document_id' => $documentId]);
@@ -44,10 +46,13 @@ class AiAssistantApiTest extends TestCase
 
     public function test_question_returns_sources_but_does_not_guess_when_ai_is_disabled(): void
     {
-        $this->actingAs($this->user)->post('/api/ai/documents', [
+        $document = $this->actingAs($this->user)->post('/api/ai/documents', [
             'title' => 'Vejledning om omsyn', 'category' => 'Vejledning',
             'file' => UploadedFile::fake()->createWithContent('omsyn.txt', 'Ved omsyn skal den tidligere synsrapport kontrolleres.'),
-        ])->assertCreated();
+        ])->assertCreated()->json('document.id');
+        $this->actingAs($this->user)->patchJson("/api/ai/documents/{$document}", [
+            'approval_status' => 'approved',
+        ])->assertOk()->assertJsonPath('document.approval_status', 'approved');
         $conversation = $this->actingAs($this->user)->postJson('/api/ai/conversations', [])->assertCreated()->json('conversation.id');
 
         $this->actingAs($this->user)->postJson("/api/ai/conversations/{$conversation}/messages", [
@@ -83,6 +88,7 @@ class AiAssistantApiTest extends TestCase
     {
         config()->set('services.ai.enabled', true);
         config()->set('services.ai.api_key', 'test-key');
+        config()->set('services.ai.test_mode', false);
         config()->set('services.ai.web_search_enabled', true);
         config()->set('services.ai.web_allowed_domains', ['retsinformation.dk', 'fstyr.dk']);
         Http::fake([
@@ -143,5 +149,44 @@ class AiAssistantApiTest extends TestCase
 
         Http::assertSent(fn ($request) => ! array_key_exists('tools', $request->data()));
         $this->assertDatabaseCount('ai_web_sources', 0);
+    }
+
+    public function test_document_metadata_can_be_reviewed_and_an_approved_replacement_supersedes_the_old_version(): void
+    {
+        $old = $this->actingAs($this->user)->post('/api/ai/documents', [
+            'title' => 'Intern kontrolvejledning', 'category' => 'Intern procedure', 'version' => '1',
+            'file' => UploadedFile::fake()->createWithContent('kontrol-v1.txt', 'Første godkendte arbejdsgang for intern kontrol.'),
+        ])->assertCreated()->json('document.id');
+        $this->actingAs($this->user)->patchJson("/api/ai/documents/{$old}", [
+            'approval_status' => 'approved', 'review_notes' => 'Godkendt version 1.',
+        ])->assertOk();
+
+        $replacement = $this->actingAs($this->user)->post('/api/ai/documents', [
+            'title' => 'Intern kontrolvejledning', 'category' => 'Intern procedure', 'version' => '2',
+            'replaces_document_id' => $old,
+            'file' => UploadedFile::fake()->createWithContent('kontrol-v2.txt', 'Anden og opdateret arbejdsgang for intern kontrol.'),
+        ])->assertCreated()->assertJsonPath('document.approval_status', 'draft')->json('document.id');
+
+        $this->assertDatabaseHas('ai_documents', ['id' => $old, 'approval_status' => 'approved', 'is_active' => true]);
+        $this->actingAs($this->user)->patchJson("/api/ai/documents/{$replacement}", [
+            'publisher' => 'Midtjysk Bilsyn', 'valid_from' => now()->toDateString(),
+            'approval_status' => 'approved', 'review_notes' => 'Kontrolleret og godkendt.',
+        ])->assertOk()->assertJsonPath('document.approval_status', 'approved');
+        $this->assertDatabaseHas('ai_documents', ['id' => $old, 'approval_status' => 'superseded', 'is_active' => false]);
+        $this->assertDatabaseHas('audit_events', ['action' => 'ai.document.updated', 'entity_id' => (string) $replacement]);
+    }
+
+    public function test_bootstrap_reports_activation_readiness_without_exposing_secrets(): void
+    {
+        $document = $this->actingAs($this->user)->post('/api/ai/documents', [
+            'title' => 'Godkendt kilde', 'category' => 'Lovgivning',
+            'file' => UploadedFile::fake()->createWithContent('kilde.txt', 'Dette er et godkendt og gyldigt fagligt kildegrundlag.'),
+        ])->assertCreated()->json('document.id');
+        $this->actingAs($this->user)->patchJson("/api/ai/documents/{$document}", ['approval_status' => 'approved'])->assertOk();
+
+        $this->actingAs($this->user)->getJson('/api/ai/bootstrap')->assertOk()
+            ->assertJsonPath('status.activationChecks.approvedDocuments', 1)
+            ->assertJsonPath('status.activationChecks.apiKeyConfigured', false)
+            ->assertJsonMissing(['api_key']);
     }
 }

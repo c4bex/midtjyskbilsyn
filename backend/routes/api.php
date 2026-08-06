@@ -44,6 +44,8 @@ Route::middleware(['web', 'api.token', 'throttle:120,1'])->group(function () {
     Route::post('/ai/conversations/{conversation}/messages', [AiAssistantController::class, 'ask'])->middleware('permission:ai.use');
     Route::get('/ai/documents', [AiAssistantController::class, 'documents'])->middleware('permission:ai.use');
     Route::post('/ai/documents', [AiAssistantController::class, 'uploadDocument'])->middleware('permission:ai.documents.write');
+    Route::patch('/ai/documents/{document}', [AiAssistantController::class, 'updateDocument'])->middleware('permission:ai.documents.write');
+    Route::post('/ai/documents/{document}/reprocess', [AiAssistantController::class, 'reprocessDocument'])->middleware('permission:ai.documents.write');
     Route::get('/ai/documents/{document}/file', [AiAssistantController::class, 'downloadDocument'])->middleware('permission:ai.use');
     Route::get('/ai/investigations', [AiAssistantController::class, 'investigations'])->middleware('permission:ai.investigations.read');
     Route::post('/ai/investigations', [AiAssistantController::class, 'createInvestigation'])->middleware('permission:ai.investigations.write');

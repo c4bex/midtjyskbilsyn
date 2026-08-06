@@ -17,16 +17,27 @@ class AiAssistantController extends Controller
 {
     public function bootstrap(): JsonResponse
     {
+        $approvedDocuments = DB::table('ai_documents')->where('status', 'ready')->where('approval_status', 'approved')
+            ->where('is_active', true)->where(fn ($query) => $query->whereNull('valid_from')->orWhere('valid_from', '<=', today()))
+            ->where(fn ($query) => $query->whereNull('valid_to')->orWhere('valid_to', '>=', today()))->count();
+
         return response()->json([
             'status' => [
                 'aiEnabled' => (bool) config('services.ai.enabled') && (bool) config('services.ai.api_key'),
+                'testMode' => (bool) config('services.ai.test_mode', true),
                 'arvoEnabled' => (bool) config('services.arvo.enabled'),
-                'webSearchAvailable' => (bool) config('services.ai.enabled') && (bool) config('services.ai.api_key') && (bool) config('services.ai.web_search_enabled'),
+                'webSearchAvailable' => (bool) config('services.ai.enabled') && (bool) config('services.ai.api_key') && ! (bool) config('services.ai.test_mode', true) && (bool) config('services.ai.web_search_enabled'),
                 'webAllowedDomains' => (array) config('services.ai.web_allowed_domains', []),
                 'model' => config('services.ai.model'),
+                'activationChecks' => [
+                    'apiKeyConfigured' => (bool) config('services.ai.api_key'),
+                    'aiFeatureEnabled' => (bool) config('services.ai.enabled'),
+                    'approvedDocuments' => $approvedDocuments,
+                    'webDomainsConfigured' => count((array) config('services.ai.web_allowed_domains', [])) > 0,
+                ],
             ],
             'conversations' => $this->conversationQuery()->limit(30)->get(),
-            'documents' => DB::table('ai_documents')->where('is_active', true)->orderByDesc('updated_at')->limit(100)->get(),
+            'documents' => DB::table('ai_documents')->orderByDesc('updated_at')->limit(100)->get(),
             'investigations' => DB::table('investigations')->orderByDesc('updated_at')->limit(30)->get(),
         ]);
     }
@@ -63,7 +74,7 @@ class AiAssistantController extends Controller
             'confidence' => 'not_assessed', 'created_at' => now(), 'updated_at' => now(),
         ]);
         $context = [];
-        if (($data['includeBookingContext'] ?? false) && ! empty($data['bookingId'])) {
+        if (($data['includeBookingContext'] ?? false) && ! (bool) config('services.ai.test_mode', true) && ! empty($data['bookingId'])) {
             $booking = DB::table('bookings as b')->leftJoin('vehicles as v', 'v.id', '=', 'b.vehicle_id')
                 ->leftJoin('customers as c', 'c.id', '=', 'b.customer_id')
                 ->where('b.id', $data['bookingId'])->select('b.id', 'b.starts_at', 'b.inspection_type', 'c.customer_type', 'v.registration_normalized')->first();
@@ -115,7 +126,7 @@ class AiAssistantController extends Controller
 
     public function documents(): JsonResponse
     {
-        return response()->json(['documents' => DB::table('ai_documents')->where('is_active', true)->orderByDesc('updated_at')->get()]);
+        return response()->json(['documents' => DB::table('ai_documents')->orderByDesc('updated_at')->get()]);
     }
 
     public function uploadDocument(Request $request, AiDocumentService $documents): JsonResponse
@@ -124,10 +135,63 @@ class AiAssistantController extends Controller
             'title' => ['required', 'string', 'max:180'], 'description' => ['nullable', 'string', 'max:1000'],
             'category' => ['required', 'string', 'max:80'], 'publisher' => ['nullable', 'string', 'max:180'],
             'version' => ['nullable', 'string', 'max:80'], 'valid_from' => ['nullable', 'date'], 'valid_to' => ['nullable', 'date'],
+            'replaces_document_id' => ['nullable', 'integer', 'exists:ai_documents,id'],
             'file' => ['required', 'file', 'max:20480', 'mimes:pdf,txt,md,csv'],
         ]);
 
-        return response()->json(['document' => $documents->store($data, $request->file('file'), Auth::id())], 201);
+        $document = $documents->store($data, $request->file('file'), Auth::id());
+        $this->audit('ai.document.uploaded', 'ai_document', $document['id'], null, $document);
+
+        return response()->json(['document' => $document], 201);
+    }
+
+    public function updateDocument(Request $request, int $document): JsonResponse
+    {
+        $current = DB::table('ai_documents')->where('id', $document)->first();
+        abort_unless($current, 404);
+        $data = $request->validate([
+            'title' => ['sometimes', 'required', 'string', 'max:180'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'category' => ['sometimes', 'required', 'string', 'max:80'],
+            'publisher' => ['nullable', 'string', 'max:180'], 'version' => ['nullable', 'string', 'max:80'],
+            'valid_from' => ['nullable', 'date'], 'valid_to' => ['nullable', 'date', 'after_or_equal:valid_from'],
+            'approval_status' => ['sometimes', 'string', 'in:draft,approved,rejected,archived'],
+            'review_notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+        if (($data['approval_status'] ?? null) === 'approved' && $current->status !== 'ready') {
+            return response()->json(['message' => 'Dokumentet kan først godkendes, når tekstbehandlingen er færdig.'], 422);
+        }
+        if (array_key_exists('approval_status', $data)) {
+            $data['approved_by'] = $data['approval_status'] === 'approved' ? Auth::id() : null;
+            $data['approved_at'] = $data['approval_status'] === 'approved' ? now() : null;
+            $data['is_active'] = $data['approval_status'] !== 'archived';
+        }
+        $data['updated_at'] = now();
+        DB::transaction(function () use ($current, $data, $document): void {
+            DB::table('ai_documents')->where('id', $document)->update($data);
+            if (($data['approval_status'] ?? null) === 'approved' && $current->replaces_document_id) {
+                DB::table('ai_documents')->where('id', $current->replaces_document_id)->update([
+                    'is_active' => false,
+                    'approval_status' => 'superseded',
+                    'superseded_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        });
+        $updated = (array) DB::table('ai_documents')->where('id', $document)->first();
+        $this->audit('ai.document.updated', 'ai_document', $document, (array) $current, $updated);
+
+        return response()->json(['document' => $updated]);
+    }
+
+    public function reprocessDocument(int $document, AiDocumentService $documents): JsonResponse
+    {
+        $before = DB::table('ai_documents')->where('id', $document)->first();
+        abort_unless($before, 404);
+        $updated = $documents->reprocess($document);
+        $this->audit('ai.document.reprocessed', 'ai_document', $document, (array) $before, $updated);
+
+        return response()->json(['document' => $updated]);
     }
 
     public function downloadDocument(int $document): StreamedResponse
@@ -213,8 +277,22 @@ class AiAssistantController extends Controller
         $webSources = DB::table('ai_web_sources')->where('message_id', $id)->get()
             ->map(fn ($source) => ['kind' => 'web', 'title' => $source->title, 'url' => $source->url, 'domain' => $source->domain, 'category' => 'Officiel webkilde']);
 
+        $metadata = json_decode($message->provider_metadata ?? '{}', true) ?: [];
+
         return ['id' => $message->id, 'role' => $message->role, 'content' => $message->content, 'confidence' => $message->confidence,
             'model' => $message->model, 'created_at' => $message->created_at,
+            'warnings' => $metadata['source_warnings'] ?? [],
             'sources' => $documentSources->concat($webSources)->values()];
+    }
+
+    private function audit(string $action, string $entityType, int|string $entityId, ?array $before, ?array $after): void
+    {
+        DB::table('audit_events')->insert([
+            'action' => $action, 'entity_type' => $entityType, 'entity_id' => (string) $entityId,
+            'actor_id' => Auth::id() ? (string) Auth::id() : 'service',
+            'before_json' => $before ? json_encode($before) : null,
+            'after_json' => $after ? json_encode($after) : null,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
     }
 }

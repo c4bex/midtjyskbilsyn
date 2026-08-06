@@ -5,7 +5,7 @@ RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoload
 
 FROM php:8.4-cli-alpine
 WORKDIR /var/www/html
-RUN apk add --no-cache curl icu-libs libzip mysql-client \
+RUN apk add --no-cache curl icu-libs libzip mysql-client poppler-utils tesseract-ocr tesseract-ocr-data-dan tesseract-ocr-data-eng \
     && apk add --no-cache --virtual .build-deps icu-dev libzip-dev $PHPIZE_DEPS \
     && docker-php-ext-install intl pdo_mysql zip \
     && apk del .build-deps
