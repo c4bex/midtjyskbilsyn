@@ -2,12 +2,35 @@
 
 Miljøet kører React-brugerfladen, Laravel API, MySQL, kø, scheduler og backup som separate containere. Kun proxy-porten eksponeres. MySQL kan ikke nås direkte fra netværket.
 
+Webbrugerfladen bygges automatisk af GitHub Actions og udgives som et færdigt
+container-image. NAS'en skal derfor ikke længere køre `npm ci` og bygge hele
+webprojektet ved hver lille designændring.
+
 1. Kopiér hele repositoryet til en privat mappe på NAS'en.
 2. Kopiér `deploy/nas/.env.example` til `deploy/nas/.env` og erstat alle pladsholdere lokalt på NAS'en.
 3. Opret mapperne `${NAS_DATA_ROOT}/mysql` og `backups`.
-4. Kør `docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml up -d --build` fra repositoryets rod.
-5. Åbn `http://<NAS-Tailscale-IP>:4321`. Der må ikke oprettes port-forwarding i routeren.
-6. Restore-test: `docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml --profile maintenance run --rm restore-test`.
+4. Kør `docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml pull web`.
+5. Kør `docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml up -d --build api migrate queue scheduler` ved første installation eller backendændringer.
+6. Start resten med `docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml up -d`.
+7. Åbn `http://<NAS-Tailscale-IP>:4321`. Der må ikke oprettes port-forwarding i routeren.
+8. Restore-test: `docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml --profile maintenance run --rm restore-test`.
+
+## Hurtige designopdateringer
+
+Når en designændring er godkendt og skubbet til `main`, bygger GitHub kun
+web-image'et. Opdatér derefter kun webcontaineren på NAS'en:
+
+```sh
+docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml pull web
+docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml up -d --no-deps web
+```
+
+MySQL, Laravel, DMR, køen og backup fortsætter uændret. En designopdatering
+medfører derfor ingen databasemigrering og ingen genstart af DMR.
+
+Under aktivt designarbejde bruges `npm run dev` på port `4317`. Ændringer vises
+her med det samme. NAS-testlinket opdateres først, når ændringen er samlet,
+testet og skubbet til GitHub.
 
 ## Sikkerhed og drift
 

@@ -89,9 +89,10 @@ services:
     command: ["php", "artisan", "schedule:work"]
 
   web:
-    build:
-      context: https://github.com/c4bex/midtjyskbilsyn.git#main
-      dockerfile: Dockerfile.web
+    # Webdelen bygges i GitHub Actions. NAS'en henter derfor kun det færdige
+    # image ved designændringer i stedet for at installere og bygge Node lokalt.
+    image: ${WEB_IMAGE:-ghcr.io/c4bex/midtjyskbilsyn-web:test}
+    pull_policy: always
     restart: unless-stopped
     environment:
       NODE_ENV: production
