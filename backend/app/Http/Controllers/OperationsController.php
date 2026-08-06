@@ -15,6 +15,38 @@ use Illuminate\Support\Str;
 
 class OperationsController extends Controller
 {
+    public function publicConfig(): JsonResponse
+    {
+        $types = DB::table('inspection_types')->where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'required_slots'])->map(fn ($type) => ['id' => (string) $type->id, 'name' => $type->name, 'requiredSlots' => (int) $type->required_slots]);
+
+        return response()->json(['locations' => [['id' => 'ikast', 'name' => 'Ikast', 'slug' => 'ikast', 'address' => 'Siriusvej 5, 7430 Ikast', 'publicBookingEnabled' => true]], 'bookingTypes' => $types, 'settings' => ['emailRequired' => false, 'minimumNoticeMinutes' => 15, 'maximumBookingDays' => 60]]);
+    }
+
+    public function publicAvailability(Request $request): JsonResponse
+    {
+        $data = $request->validate(['locationId' => ['nullable', 'string', 'in:ikast'], 'bookingTypeId' => ['required', 'integer', 'exists:inspection_types,id'], 'from' => ['required', 'date_format:Y-m-d'], 'to' => ['required', 'date_format:Y-m-d']]);
+        $type = DB::table('inspection_types')->where('id', $data['bookingTypeId'])->where('is_active', true)->first();
+        abort_unless($type, 404, 'Bookingtypen findes ikke');
+        $from = CarbonImmutable::parse($data['from']);
+        $to = CarbonImmutable::parse($data['to']);
+        abort_if($to->lt($from) || $from->diffInDays($to) > 31, 422, 'Vælg højst 31 dage ad gangen');
+        $days = [];
+        for ($date = $from; $date->lte($to); $date = $date->addDay()) {
+            $availability = $this->availabilityForDate($date->toDateString(), $type->name);
+            $days[] = ['date' => $date->toDateString(), 'availableSlots' => $availability['availableSlots'], 'availableCount' => count($availability['availableSlots'])];
+        }
+
+        return response()->json(['bookingType' => ['id' => (string) $type->id, 'name' => $type->name, 'requiredSlots' => (int) $type->required_slots], 'days' => $days]);
+    }
+
+    public function publicCreateBooking(Request $request): JsonResponse
+    {
+        $request->validate(['phone' => ['required', 'string', 'max:32'], 'email' => ['nullable', 'email', 'max:160']]);
+        $request->merge(['customerType' => 'private', 'source' => 'public_web']);
+
+        return $this->createBooking($request);
+    }
+
     public function health(): JsonResponse
     {
         try {
@@ -73,15 +105,15 @@ class OperationsController extends Controller
             $model = trim(implode(' ', $vehicleWords)) ?: null;
             $vehicle = DB::table('vehicles')->where('registration_normalized', $registration)->first();
             if ($vehicle) {
-                $customerId = $vehicle->customer_id ?: DB::table('customers')->insertGetId(['display_name' => $input['customer'], 'customer_type' => $input['customerType'], 'created_at' => now(), 'updated_at' => now()]);
-                DB::table('customers')->where('id', $customerId)->update(['display_name' => $input['customer'], 'customer_type' => $input['customerType'], 'phone' => $input['phone'] ?? null, 'updated_at' => now()]);
+                $customerId = $vehicle->customer_id ?: DB::table('customers')->insertGetId(['display_name' => $input['customer'], 'customer_type' => $input['customerType'], 'phone' => $input['phone'] ?? null, 'email' => $input['email'] ?? null, 'created_at' => now(), 'updated_at' => now()]);
+                DB::table('customers')->where('id', $customerId)->update(['display_name' => $input['customer'], 'customer_type' => $input['customerType'], 'phone' => $input['phone'] ?? null, 'email' => $input['email'] ?? null, 'updated_at' => now()]);
                 DB::table('vehicles')->where('id', $vehicle->id)->update(['customer_id' => $customerId, 'make' => $make, 'model' => $model, 'updated_at' => now()]);
                 $vehicleId = $vehicle->id;
             } else {
-                $customerId = DB::table('customers')->insertGetId(['display_name' => $input['customer'], 'customer_type' => $input['customerType'], 'phone' => $input['phone'] ?? null, 'created_at' => now(), 'updated_at' => now()]);
+                $customerId = DB::table('customers')->insertGetId(['display_name' => $input['customer'], 'customer_type' => $input['customerType'], 'phone' => $input['phone'] ?? null, 'email' => $input['email'] ?? null, 'created_at' => now(), 'updated_at' => now()]);
                 $vehicleId = DB::table('vehicles')->insertGetId(['customer_id' => $customerId, 'registration_normalized' => $registration, 'make' => $make, 'model' => $model, 'created_at' => now(), 'updated_at' => now()]);
             }
-            $id = DB::table('bookings')->insertGetId(['customer_id' => $customerId, 'vehicle_id' => $vehicleId, 'starts_at' => $startsAt, 'ends_at' => $startsAt->addMinutes($definition['requiredSlots'] * $availability['intervalMinutes']), 'slot_count' => $definition['requiredSlots'], 'inspection_type' => $input['inspection'], 'requisition_number' => $input['requisitionNumber'] ?? null, 'status' => $input['status'] ?? 'confirmed', 'source' => 'manual', 'created_at' => now(), 'updated_at' => now()]);
+            $id = DB::table('bookings')->insertGetId(['customer_id' => $customerId, 'vehicle_id' => $vehicleId, 'starts_at' => $startsAt, 'ends_at' => $startsAt->addMinutes($definition['requiredSlots'] * $availability['intervalMinutes']), 'slot_count' => $definition['requiredSlots'], 'inspection_type' => $input['inspection'], 'requisition_number' => $input['requisitionNumber'] ?? null, 'status' => $input['status'] ?? 'confirmed', 'source' => $input['source'] ?? 'manual', 'created_at' => now(), 'updated_at' => now()]);
             $this->audit('booking.created', 'booking', $id, null, $input);
             if ($input['customerType'] === 'private') {
                 $this->queueSms($id, 'confirmation', $customerId, $input['phone'] ?? null, $startsAt, $registration);
@@ -694,7 +726,7 @@ class OperationsController extends Controller
 
     private function bookingInput(Request $request): array|JsonResponse
     {
-        $validator = Validator::make($request->all(), ['customer' => ['required', 'string', 'max:160'], 'customerType' => ['required', 'in:private,business'], 'phone' => ['nullable', 'string', 'max:32'], 'plate' => ['required', 'string', 'max:12'], 'vehicle' => ['nullable', 'string', 'max:200'], 'requisitionNumber' => ['nullable', 'string', 'max:100'], 'date' => ['required', 'date_format:Y-m-d'], 'time' => ['required', 'date_format:H:i'], 'inspection' => ['required', 'string', 'max:80'], 'status' => ['nullable', 'string', 'max:32']]);
+        $validator = Validator::make($request->all(), ['customer' => ['required', 'string', 'max:160'], 'customerType' => ['required', 'in:private,business'], 'phone' => ['nullable', 'string', 'max:32'], 'email' => ['nullable', 'email', 'max:160'], 'plate' => ['required', 'string', 'max:12'], 'vehicle' => ['nullable', 'string', 'max:200'], 'requisitionNumber' => ['nullable', 'string', 'max:100'], 'date' => ['required', 'date_format:Y-m-d'], 'time' => ['required', 'date_format:H:i'], 'inspection' => ['required', 'string', 'max:80'], 'status' => ['nullable', 'string', 'max:32'], 'source' => ['nullable', 'in:manual,public_web,phone,business_portal']]);
 
         return $validator->fails() ? response()->json(['error' => 'Kunde, dato, tid og registreringsnummer skal udfyldes', 'errors' => $validator->errors()], 422) : $validator->validated();
     }

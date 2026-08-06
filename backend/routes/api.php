@@ -36,6 +36,13 @@ Route::middleware('web')->group(function () {
     });
 });
 
+// Offentlig privatbooking: ingen internt login eller API-token, kun ratebegrænsning.
+Route::middleware(['web', 'throttle:30,1'])->prefix('public')->group(function () {
+    Route::get('/config', [OperationsController::class, 'publicConfig']);
+    Route::get('/availability', [OperationsController::class, 'publicAvailability']);
+    Route::post('/bookings', [OperationsController::class, 'publicCreateBooking']);
+});
+
 Route::middleware(['web', 'api.token', 'throttle:120,1'])->group(function () {
     Route::get('/health', [OperationsController::class, 'health']);
     Route::get('/bookings', [OperationsController::class, 'bookings']);
