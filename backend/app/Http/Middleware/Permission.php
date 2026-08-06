@@ -20,7 +20,6 @@ class Permission
             'imports.write' => ['label' => 'Validere importer', 'group' => 'Fakturering'],
             'employees.write' => ['label' => 'Administrere medarbejdere og rettigheder', 'group' => 'Administration'],
             'settings.write' => ['label' => 'Ændre åbningstider og systemindstillinger', 'group' => 'Administration'],
-            'ai.use' => ['label' => 'Bruge AI-assistenten', 'group' => 'AI-assistent'],
             'ai.documents.write' => ['label' => 'Administrere AI-dokumenter', 'group' => 'AI-assistent'],
             'ai.investigations.read' => ['label' => 'Se AI-undersøgelser', 'group' => 'AI-assistent'],
             'ai.investigations.write' => ['label' => 'Oprette AI-undersøgelser', 'group' => 'AI-assistent'],
@@ -32,7 +31,7 @@ class Permission
     {
         return match ($role) {
             'Teknisk ansvarlig / Ejer' => ['bookings.read', 'bookings.write', 'customers.read', 'customers.write', 'imports.write', 'invoices.write', 'employees.write', 'settings.write', 'ai.use', 'ai.documents.write', 'ai.investigations.read', 'ai.investigations.write', 'ai.arvo.send'],
-            'Synsinspektør' => ['bookings.read', 'bookings.write', 'customers.read', 'customers.write'],
+            'Synsinspektør' => ['bookings.read', 'bookings.write', 'customers.read', 'customers.write', 'ai.use'],
             'Bogholder / blæksprut' => ['bookings.read', 'customers.read', 'invoices.write', 'ai.use', 'ai.investigations.read', 'ai.investigations.write'],
             default => [],
         };
@@ -42,7 +41,9 @@ class Permission
     {
         $employee = Auth::check() ? DB::table('employees')->where('user_id', Auth::id())->first() : null;
         $role = $employee?->role ?? (string) env('BOOKING_API_ROLE', 'Teknisk ansvarlig / Ejer');
-        if ($employee && DB::table('employee_permissions')->where('employee_id', $employee->id)->exists()) {
+        if ($permission === 'ai.use') {
+            $allowed = true;
+        } elseif ($employee && DB::table('employee_permissions')->where('employee_id', $employee->id)->exists()) {
             $allowed = (bool) DB::table('employee_permissions')->where('employee_id', $employee->id)->where('permission_key', $permission)->value('allowed');
         } else {
             $allowed = in_array($permission, self::rolePermissions($role), true);

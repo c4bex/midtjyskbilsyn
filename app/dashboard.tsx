@@ -441,7 +441,7 @@ export function Dashboard() {
         <div className="live-actions">
           <div className="global-search"><Search size={16} /><input value={searchQuery} onFocus={() => searchQuery.length >= 2 && setSearchOpen(true)} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Søg kunde, booking eller reg.nr." aria-label="Søg i systemet" />{searchOpen && <div className="global-search-results">{searchResults.length === 0 ? <span className="search-empty">Ingen resultater</span> : searchResults.map((result) => <button key={`${result.type}-${result.id}`} onClick={() => selectSearchResult(result)}><strong>{result.title}</strong><small>{result.subtitle}{result.type === "booking" ? " · Klik for at redigere" : ""}</small></button>)}</div>}</div>
           <span className="live-location">Ikast</span>
-          {sessionPermissions.includes("ai.use") && <button className="ai-launch-button" aria-label="Åbn fagassistent" onClick={() => setAssistantOpen(true)}><Sparkles size={16} /><span>Fagassistent</span></button>}
+          <button className="ai-launch-button" aria-label="Åbn fagassistent" onClick={() => setAssistantOpen(true)}><Sparkles size={16} /><span>Fagassistent</span></button>
           <button className="icon-button notification" aria-label="Notifikationer" onClick={() => flash("Du har 2 nye driftsbeskeder")}><Bell size={18} /><i /></button>
           <button className="live-profile" aria-label="Profil" onClick={() => setProfileOpen((open) => !open)}><span>RM</span><b>Rasmus</b><ChevronDown size={14} /></button>
           {profileOpen && <div className="live-profile-menu"><button onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}>Log ud</button></div>}
