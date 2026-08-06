@@ -49,13 +49,16 @@ class OperationsApiTest extends TestCase
 
     public function test_global_search_finds_booking_by_plate_and_requisition_number(): void
     {
-        $date = now()->addDays(4)->toDateString();
-        $bookingId = $this->actingAs($this->user)->postJson('/api/bookings', [
+        $laterDate = now()->addDays(8)->toDateString();
+        $nearDate = now()->addDays(4)->toDateString();
+        $bookingPayload = [
             'customer' => 'Søgekunde ApS', 'customerType' => 'business', 'plate' => 'EN48111', 'vehicle' => 'Ford Transit',
-            'requisitionNumber' => 'REKV-2026-42', 'date' => $date, 'time' => '08:00', 'inspection' => 'Periodisk syn',
-        ])->assertCreated()->json('booking.id');
+            'requisitionNumber' => 'REKV-2026-42', 'time' => '08:00', 'inspection' => 'Periodisk syn',
+        ];
+        $this->actingAs($this->user)->postJson('/api/bookings', $bookingPayload + ['date' => $laterDate])->assertCreated();
+        $bookingId = $this->actingAs($this->user)->postJson('/api/bookings', $bookingPayload + ['date' => $nearDate])->assertCreated()->json('booking.id');
 
-        $this->actingAs($this->user)->getJson('/api/search?q=EN48111')->assertOk()->assertJsonPath('results.0.type', 'booking')->assertJsonPath('results.0.booking.id', (string) $bookingId);
+        $this->actingAs($this->user)->getJson('/api/search?q=EN48111')->assertOk()->assertJsonPath('results.0.type', 'booking')->assertJsonPath('results.0.booking.id', (string) $bookingId)->assertJsonPath('results.0.booking.date', $nearDate);
         $this->actingAs($this->user)->getJson('/api/search?q=REKV-2026-42')->assertOk()->assertJsonPath('results.0.booking.requisitionNumber', 'REKV-2026-42');
     }
 
