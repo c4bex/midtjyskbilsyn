@@ -21,6 +21,8 @@ class AiAssistantController extends Controller
             'status' => [
                 'aiEnabled' => (bool) config('services.ai.enabled') && (bool) config('services.ai.api_key'),
                 'arvoEnabled' => (bool) config('services.arvo.enabled'),
+                'webSearchAvailable' => (bool) config('services.ai.enabled') && (bool) config('services.ai.api_key') && (bool) config('services.ai.web_search_enabled'),
+                'webAllowedDomains' => (array) config('services.ai.web_allowed_domains', []),
                 'model' => config('services.ai.model'),
             ],
             'conversations' => $this->conversationQuery()->limit(30)->get(),
@@ -53,6 +55,7 @@ class AiAssistantController extends Controller
         $data = $request->validate([
             'question' => ['required', 'string', 'max:8000'],
             'includeBookingContext' => ['sometimes', 'boolean'],
+            'useWebSearch' => ['sometimes', 'boolean'],
             'bookingId' => ['nullable', 'integer', 'exists:bookings,id'],
         ]);
         DB::table('ai_messages')->insert([
@@ -73,13 +76,13 @@ class AiAssistantController extends Controller
         }
 
         try {
-            $answer = $assistant->answer($data['question'], $context);
+            $answer = $assistant->answer($data['question'], $context, (bool) ($data['useWebSearch'] ?? false));
         } catch (\Throwable $exception) {
             report($exception);
             $answer = [
                 'content' => 'AI-assistenten er midlertidigt utilgængelig. Dokumenter og booking kan fortsat bruges normalt.',
                 'confidence' => 'unavailable', 'model' => null,
-                'provider_metadata' => ['error' => 'provider_unavailable'], 'sources' => [],
+                'provider_metadata' => ['error' => 'provider_unavailable'], 'sources' => [], 'web_sources' => [],
             ];
         }
         $messageId = DB::table('ai_messages')->insertGetId([
@@ -92,6 +95,13 @@ class AiAssistantController extends Controller
                 'message_id' => $messageId, 'document_id' => $source['document_id'], 'chunk_id' => $source['chunk_id'],
                 'page_number' => $source['page_number'], 'quotation' => Str::limit($source['content'], 700),
                 'relevance_score' => $source['score'], 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+        foreach ($answer['web_sources'] ?? [] as $source) {
+            DB::table('ai_web_sources')->insert([
+                'message_id' => $messageId, 'title' => $source['title'], 'url' => $source['url'],
+                'domain' => $source['domain'], 'source_type' => $source['source_type'],
+                'accessed_at' => now(), 'created_at' => now(), 'updated_at' => now(),
             ]);
         }
         if (DB::table('ai_messages')->where('conversation_id', $conversation)->count() === 2) {
@@ -197,9 +207,14 @@ class AiAssistantController extends Controller
     {
         $message = DB::table('ai_messages')->where('id', $id)->first();
 
+        $documentSources = DB::table('ai_message_sources as s')->join('ai_documents as d', 'd.id', '=', 's.document_id')
+            ->where('s.message_id', $id)->select('s.document_id', 'd.title', 'd.category', 's.page_number', 's.quotation', 's.relevance_score')->get()
+            ->map(fn ($source) => array_merge((array) $source, ['kind' => 'document']));
+        $webSources = DB::table('ai_web_sources')->where('message_id', $id)->get()
+            ->map(fn ($source) => ['kind' => 'web', 'title' => $source->title, 'url' => $source->url, 'domain' => $source->domain, 'category' => 'Officiel webkilde']);
+
         return ['id' => $message->id, 'role' => $message->role, 'content' => $message->content, 'confidence' => $message->confidence,
             'model' => $message->model, 'created_at' => $message->created_at,
-            'sources' => DB::table('ai_message_sources as s')->join('ai_documents as d', 'd.id', '=', 's.document_id')
-                ->where('s.message_id', $id)->select('s.document_id', 'd.title', 'd.category', 's.page_number', 's.quotation', 's.relevance_score')->get()];
+            'sources' => $documentSources->concat($webSources)->values()];
     }
 }

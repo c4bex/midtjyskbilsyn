@@ -14,6 +14,8 @@ return [
         'api_key' => env('OPENAI_API_KEY'),
         'model' => env('OPENAI_MODEL', 'gpt-5.6-sol'),
         'timeout' => (int) env('OPENAI_TIMEOUT_SECONDS', 45),
+        'web_search_enabled' => filter_var(env('AI_WEB_SEARCH_ENABLED', false), FILTER_VALIDATE_BOOL),
+        'web_allowed_domains' => array_values(array_filter(array_map('trim', explode(',', env('AI_WEB_ALLOWED_DOMAINS', 'retsinformation.dk,fstyr.dk,motorst.dk,skat.dk,virk.dk,borger.dk'))))),
     ],
 
     'arvo' => [

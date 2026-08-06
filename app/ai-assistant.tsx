@@ -1,13 +1,13 @@
 "use client";
 
-import { BookOpen, ChevronLeft, ExternalLink, FileUp, History, Maximize2, MessageSquare, Minimize2, Plus, Save, Send, Sparkles, X } from "lucide-react";
+import { BookOpen, ChevronLeft, ExternalLink, FileUp, Globe2, History, Maximize2, MessageSquare, Minimize2, Plus, Save, Send, ShieldCheck, Sparkles, X } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
-type Source = { document_id: number; title: string; category: string; page_number?: number | null; quotation?: string };
+type Source = { kind?: "document" | "web"; document_id?: number; title: string; category?: string; page_number?: number | null; quotation?: string; url?: string; domain?: string };
 type Message = { id: number; role: "user" | "assistant"; content: string; confidence?: string; sources: Source[] };
 type Conversation = { id: number; title: string; updated_at: string };
 type DocumentItem = { id: number; title: string; category: string; publisher?: string | null; version?: string | null; status: string; processing_error?: string | null };
-type Bootstrap = { status: { aiEnabled: boolean; arvoEnabled: boolean; model?: string }; conversations: Conversation[]; documents: DocumentItem[]; investigations: Array<{ id: number; reference_number: string; title: string; status: string }> };
+type Bootstrap = { status: { aiEnabled: boolean; arvoEnabled: boolean; webSearchAvailable: boolean; webAllowedDomains: string[]; model?: string }; conversations: Conversation[]; documents: DocumentItem[]; investigations: Array<{ id: number; reference_number: string; title: string; status: string }> };
 
 export function AiAssistant({ open, onClose, booking }: { open: boolean; onClose: () => void; booking?: { id: string; customer: string; plate: string; date: string; time: string } | null }) {
   const [fullScreen, setFullScreen] = useState(false);
@@ -17,6 +17,7 @@ export function AiAssistant({ open, onClose, booking }: { open: boolean; onClose
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
   const [includeBooking, setIncludeBooking] = useState(false);
+  const [useWebSearch, setUseWebSearch] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -70,11 +71,12 @@ export function AiAssistant({ open, onClose, booking }: { open: boolean; onClose
       const id = conversationId ?? await newConversation(false);
       const response = await fetch(`/api/ai/conversations/${id}/messages`, {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question: text, includeBookingContext: Boolean(includeBooking && booking), bookingId: includeBooking && booking ? Number(booking.id) : null }),
+        body: JSON.stringify({ question: text, includeBookingContext: Boolean(includeBooking && booking), bookingId: includeBooking && booking ? Number(booking.id) : null, useWebSearch }),
       });
       if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message ?? "Spørgsmålet kunne ikke behandles");
       const answer = await response.json() as Message;
       setMessages((current) => [...current, answer]);
+      setUseWebSearch(false);
       await loadBootstrap();
     } catch (value) { setError(value instanceof Error ? value.message : "Assistenten kunne ikke svare"); }
     finally { setBusy(false); }
@@ -121,11 +123,16 @@ export function AiAssistant({ open, onClose, booking }: { open: boolean; onClose
       <div className="ai-chat" ref={scrollRef}>
         <div className="ai-chat-toolbar"><button onClick={() => void newConversation().catch(() => setError("Ny samtale kunne ikke oprettes"))}><Plus size={15} />Ny samtale</button>{conversationId && messages.some((item) => item.role === "assistant") && <button onClick={() => void saveInvestigation()}><Save size={15} />Gem undersøgelse</button>}</div>
         {messages.length === 0 && <section className="ai-welcome"><span><Sparkles size={22} /></span><h2>Hvad skal vi undersøge?</h2><p>Spørg til regler, vejledninger eller tidligere dokumentation. Svaret viser altid de anvendte kilder.</p><div><button onClick={() => setQuestion("Hvilke regler gælder for denne type syn?")}>Regler for syn</button><button onClick={() => setQuestion("Find relevant vejledning om registrering")}>Registrering</button></div></section>}
-        {messages.map((message) => <article key={message.id} className={`ai-message ${message.role}`}><div>{message.content}</div>{message.sources?.length > 0 && <section><strong>Kilder</strong>{message.sources.map((source, index) => <a key={`${message.id}-${source.document_id}-${index}`} href={`/api/ai/documents/${source.document_id}/file`} target="_blank" rel="noreferrer"><BookOpen size={13} /><span>{source.title}{source.page_number ? ` · side ${source.page_number}` : ""}</span><ExternalLink size={12} /></a>)}</section>}</article>)}
+        {messages.map((message) => <article key={message.id} className={`ai-message ${message.role}`}><div>{message.content}</div>{message.sources?.length > 0 && <section><strong>Kilder</strong>{message.sources.map((source, index) => {
+          const web = source.kind === "web";
+          const href = web ? source.url : `/api/ai/documents/${source.document_id}/file`;
+          return <a className={web ? "web-source" : ""} key={`${message.id}-${source.document_id ?? source.url}-${index}`} href={href} target="_blank" rel="noreferrer">{web ? <Globe2 size={13} /> : <BookOpen size={13} />}<span><b>{web ? "Officiel webkilde" : "Virksomhedens dokument"}</b>{source.title}{web && source.domain ? ` · ${source.domain}` : source.page_number ? ` · side ${source.page_number}` : ""}</span><ExternalLink size={12} /></a>;
+        })}</section>}</article>)}
         {busy && <div className="ai-thinking"><i /><i /><i /><span>Undersøger kilderne…</span></div>}
       </div>
       <form className="ai-composer" onSubmit={(event) => void ask(event)}>
         {booking && <label className="ai-context"><input type="checkbox" checked={includeBooking} onChange={(event) => setIncludeBooking(event.target.checked)} /><span><strong>Medtag den valgte booking</strong><small>{booking.plate} · {booking.date} kl. {booking.time}. Kundens navn sendes ikke.</small></span></label>}
+        <label className={`ai-web-option ${bootstrap?.status.webSearchAvailable ? "" : "disabled"}`}><input type="checkbox" checked={useWebSearch} disabled={!bootstrap?.status.webSearchAvailable} onChange={(event) => setUseWebSearch(event.target.checked)} /><Globe2 size={16} /><span><strong>Søg også i officielle kilder</strong><small>{bootstrap?.status.webSearchAvailable ? "Kun godkendte myndighedssider · valget gælder ét spørgsmål" : "Klargjort, men ikke aktiveret på serveren endnu"}</small></span>{bootstrap?.status.webSearchAvailable && <ShieldCheck size={15} />}</label>
         <div><textarea value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void ask(); } }} placeholder="Spørg om regler, vejledning eller dokumentation…" rows={3} /><button type="submit" disabled={!question.trim() || busy} aria-label="Send spørgsmål"><Send size={18} /></button></div>
         <small>Kontrollér altid kilde og gyldighed før en afgørelse.</small>
       </form>

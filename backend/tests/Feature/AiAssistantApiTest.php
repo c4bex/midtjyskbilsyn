@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -76,5 +77,71 @@ class AiAssistantApiTest extends TestCase
 
         $this->actingAs($this->user)->postJson("/api/ai/conversations/{$conversation}/messages", ['question' => 'Find vejledning', 'bookingId' => $booking, 'includeBookingContext' => false])->assertOk();
         $this->assertDatabaseHas('ai_conversations', ['id' => $conversation, 'booking_id' => null]);
+    }
+
+    public function test_web_search_requires_explicit_choice_and_is_limited_to_official_domains(): void
+    {
+        config()->set('services.ai.enabled', true);
+        config()->set('services.ai.api_key', 'test-key');
+        config()->set('services.ai.web_search_enabled', true);
+        config()->set('services.ai.web_allowed_domains', ['retsinformation.dk', 'fstyr.dk']);
+        Http::fake([
+            'api.openai.com/*' => Http::response([
+                'id' => 'resp_test_web',
+                'output' => [
+                    ['type' => 'web_search_call', 'action' => ['sources' => [[
+                        'url' => 'https://www.retsinformation.dk/eli/lta/2026/123',
+                        'title' => 'Bekendtgørelse om syn af køretøjer',
+                    ]]]],
+                    ['type' => 'message', 'content' => [[
+                        'type' => 'output_text', 'text' => 'Kort svar med officiel kilde.',
+                        'annotations' => [[
+                            'type' => 'url_citation',
+                            'url' => 'https://www.retsinformation.dk/eli/lta/2026/123',
+                            'title' => 'Bekendtgørelse om syn af køretøjer',
+                        ]],
+                    ]]],
+                ],
+            ]),
+        ]);
+        $conversation = $this->actingAs($this->user)->postJson('/api/ai/conversations', [])->assertCreated()->json('conversation.id');
+
+        $this->actingAs($this->user)->postJson("/api/ai/conversations/{$conversation}/messages", [
+            'question' => 'Hvad siger den gældende bekendtgørelse?',
+            'useWebSearch' => true,
+        ])->assertOk()
+            ->assertJsonPath('confidence', 'source_grounded')
+            ->assertJsonPath('sources.0.kind', 'web')
+            ->assertJsonPath('sources.0.domain', 'www.retsinformation.dk');
+
+        Http::assertSent(function ($request) {
+            $payload = $request->data();
+
+            return $request->url() === 'https://api.openai.com/v1/responses'
+                && data_get($payload, 'tools.0.type') === 'web_search'
+                && data_get($payload, 'tools.0.filters.allowed_domains') === ['retsinformation.dk', 'fstyr.dk']
+                && data_get($payload, 'tool_choice') === 'required';
+        });
+        $this->assertDatabaseHas('ai_web_sources', [
+            'domain' => 'www.retsinformation.dk',
+            'source_type' => 'official_web',
+        ]);
+    }
+
+    public function test_normal_question_never_searches_the_web_implicitly(): void
+    {
+        config()->set('services.ai.enabled', true);
+        config()->set('services.ai.api_key', 'test-key');
+        config()->set('services.ai.web_search_enabled', true);
+        config()->set('services.ai.web_allowed_domains', ['retsinformation.dk']);
+        Http::fake(['api.openai.com/*' => Http::response(['id' => 'resp_no_web', 'output_text' => 'Svar uden netsøgning.'])]);
+        $conversation = $this->actingAs($this->user)->postJson('/api/ai/conversations', [])->assertCreated()->json('conversation.id');
+
+        $this->actingAs($this->user)->postJson("/api/ai/conversations/{$conversation}/messages", [
+            'question' => 'Hvad findes i vores dokumenter?',
+        ])->assertOk();
+
+        Http::assertSent(fn ($request) => ! array_key_exists('tools', $request->data()));
+        $this->assertDatabaseCount('ai_web_sources', 0);
     }
 }

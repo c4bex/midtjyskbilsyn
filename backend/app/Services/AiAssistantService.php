@@ -7,42 +7,65 @@ use Illuminate\Support\Facades\Http;
 
 class AiAssistantService
 {
-    public function answer(string $question, array $context = []): array
+    public function answer(string $question, array $context = [], bool $useWebSearch = false): array
     {
         $sources = $this->findSources($question);
+        $webSearchEnabled = $useWebSearch
+            && (bool) config('services.ai.web_search_enabled')
+            && $this->allowedWebDomains() !== [];
         if (! config('services.ai.enabled') || ! config('services.ai.api_key')) {
+            $webStatus = $useWebSearch ? "\n\nNetsøgning er ikke aktiveret på serveren endnu." : '';
+
             return [
                 'content' => $sources === []
-                    ? "Kort svar\n\nJeg kan ikke finde et entydigt svar i de tilgængelige dokumenter. AI-modellen er ikke aktiveret endnu, så spørgsmålet kan ikke vurderes sikkert.\n\nKilder\n\nIngen relevante kilder fundet."
-                    : "Kort svar\n\nJeg fandt relevante afsnit i dokumentbiblioteket, men AI-modellen er ikke aktiveret endnu. Åbn kilderne nedenfor og vurder dem manuelt; jeg vil ikke gætte på svaret.\n\nKilder\n\n".$this->sourceList($sources),
+                    ? "Kort svar\n\nJeg kan ikke finde et entydigt svar i de tilgængelige dokumenter. AI-modellen er ikke aktiveret endnu, så spørgsmålet kan ikke vurderes sikkert.{$webStatus}\n\nKilder\n\nIngen relevante kilder fundet."
+                    : "Kort svar\n\nJeg fandt relevante afsnit i dokumentbiblioteket, men AI-modellen er ikke aktiveret endnu. Åbn kilderne nedenfor og vurder dem manuelt; jeg vil ikke gætte på svaret.{$webStatus}\n\nKilder\n\n".$this->sourceList($sources),
                 'confidence' => 'needs_review',
                 'model' => null,
-                'provider_metadata' => ['enabled' => false],
+                'provider_metadata' => ['enabled' => false, 'web_search_requested' => $useWebSearch, 'web_search_used' => false],
                 'sources' => $sources,
+                'web_sources' => [],
             ];
         }
 
-        $prompt = $this->systemPrompt($sources, $context);
+        $payload = [
+            'model' => config('services.ai.model', 'gpt-5.6-sol'),
+            'instructions' => $this->systemPrompt($sources, $context, $webSearchEnabled),
+            'input' => $question,
+        ];
+        if ($webSearchEnabled) {
+            $payload['tools'] = [[
+                'type' => 'web_search',
+                'search_context_size' => 'low',
+                'filters' => ['allowed_domains' => $this->allowedWebDomains()],
+            ]];
+            $payload['tool_choice'] = 'required';
+            $payload['include'] = ['web_search_call.action.sources'];
+        }
+
         $response = Http::withToken(config('services.ai.api_key'))
             ->acceptJson()
             ->timeout((int) config('services.ai.timeout', 45))
-            ->post('https://api.openai.com/v1/responses', [
-                'model' => config('services.ai.model', 'gpt-5.6-sol'),
-                'instructions' => $prompt,
-                'input' => $question,
-            ])->throw()->json();
+            ->post('https://api.openai.com/v1/responses', $payload)->throw()->json();
 
         $content = $response['output_text'] ?? $this->outputText($response['output'] ?? []);
         if (! is_string($content) || trim($content) === '') {
             $content = 'Jeg kan ikke finde et entydigt svar i de tilgængelige dokumenter.';
         }
+        $webSources = $webSearchEnabled ? $this->webSources($response['output'] ?? []) : [];
+        $webSearchUsed = collect($response['output'] ?? [])->contains(fn ($item) => ($item['type'] ?? null) === 'web_search_call');
 
         return [
             'content' => $content,
-            'confidence' => $sources === [] ? 'low' : 'source_grounded',
+            'confidence' => ($sources === [] && $webSources === []) ? 'low' : 'source_grounded',
             'model' => (string) config('services.ai.model', 'gpt-5.6-sol'),
-            'provider_metadata' => ['response_id' => $response['id'] ?? null],
+            'provider_metadata' => [
+                'response_id' => $response['id'] ?? null,
+                'web_search_requested' => $useWebSearch,
+                'web_search_used' => $webSearchUsed,
+            ],
             'sources' => $sources,
+            'web_sources' => $webSources,
         ];
     }
 
@@ -82,15 +105,19 @@ class AiAssistantService
         return array_slice($ranked, 0, 6);
     }
 
-    private function systemPrompt(array $sources, array $context): string
+    private function systemPrompt(array $sources, array $context, bool $useWebSearch): string
     {
         $sourceText = collect($sources)->map(fn ($source, $index) => sprintf(
             "[Kilde %d] %s, side %s\n%s", $index + 1, $source['title'], $source['page_number'] ?? 'ukendt', $source['content']
         ))->implode("\n\n");
         $contextText = $context === [] ? 'Ingen bookingoplysninger er delt.' : json_encode($context, JSON_UNESCAPED_UNICODE);
 
+        $sourceRule = $useWebSearch
+            ? 'Brug de medsendte interne dokumenter og den aktiverede søgning i godkendte officielle myndighedskilder. Skeln tydeligt mellem "Virksomhedens dokument" og "Officiel webkilde". Et webfund er ikke automatisk en internt godkendt procedure. Ved modstrid skal forskellen fremhæves.'
+            : 'Svar udelukkende ud fra de medsendte kilder.';
+
         return <<<PROMPT
-Du er en intern dansk fagassistent for en bilsynsvirksomhed. Svar udelukkende ud fra de medsendte kilder. Gæt aldrig. Hvis kilderne ikke giver et entydigt svar, skriv tydeligt: "Jeg kan ikke finde et entydigt svar i de tilgængelige dokumenter." Skeln mellem bindende regel, vejledning og intern fortolkning. Brug ikke personoplysninger ud over den udtrykkeligt delte bookingkontekst.
+Du er en intern dansk fagassistent for en bilsynsvirksomhed. {$sourceRule} Gæt aldrig. Hvis kilderne ikke giver et entydigt svar, skriv tydeligt: "Jeg kan ikke finde et entydigt svar i de tilgængelige dokumenter." Skeln mellem bindende regel, vejledning og intern fortolkning. Brug ikke personoplysninger ud over den udtrykkeligt delte bookingkontekst.
 
 Svar med overskrifterne: Kort svar, Regelgrundlag, Praktisk vurdering, Dokumentation, Kilder. Henvis løbende med [Kilde N].
 
@@ -118,5 +145,54 @@ PROMPT;
         }
 
         return implode("\n", $parts);
+    }
+
+    private function allowedWebDomains(): array
+    {
+        return array_values(array_unique(array_filter(array_map(
+            fn ($domain) => mb_strtolower(trim((string) $domain)),
+            (array) config('services.ai.web_allowed_domains', [])
+        ))));
+    }
+
+    private function webSources(array $output): array
+    {
+        $sources = [];
+        foreach ($output as $item) {
+            foreach ($item['content'] ?? [] as $content) {
+                foreach ($content['annotations'] ?? [] as $annotation) {
+                    if (($annotation['type'] ?? null) !== 'url_citation' || empty($annotation['url'])) {
+                        continue;
+                    }
+                    $this->addWebSource($sources, $annotation['url'], $annotation['title'] ?? null);
+                }
+            }
+            if (($item['type'] ?? null) === 'web_search_call') {
+                foreach ($item['action']['sources'] ?? [] as $source) {
+                    if (! empty($source['url'])) {
+                        $this->addWebSource($sources, $source['url'], $source['title'] ?? null);
+                    }
+                }
+            }
+        }
+
+        return array_values($sources);
+    }
+
+    private function addWebSource(array &$sources, string $url, ?string $title): void
+    {
+        $domain = mb_strtolower((string) parse_url($url, PHP_URL_HOST));
+        $allowed = collect($this->allowedWebDomains())->contains(
+            fn ($candidate) => $domain === $candidate || str_ends_with($domain, '.'.$candidate)
+        );
+        if (! $allowed || isset($sources[$url])) {
+            return;
+        }
+        $sources[$url] = [
+            'title' => trim((string) $title) ?: $domain,
+            'url' => $url,
+            'domain' => $domain,
+            'source_type' => 'official_web',
+        ];
     }
 }
