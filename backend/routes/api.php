@@ -19,7 +19,7 @@ $sessionPayload = static function (): array {
 Route::middleware('web')->group(function () use ($sessionPayload) {
     Route::post('/login', function () use ($sessionPayload) {
         $credentials = request()->validate(['email' => ['required', 'email'], 'password' => ['required', 'string']]);
-        if (! Auth::attempt($credentials)) {
+        if (! Auth::attempt($credentials, request()->boolean('remember'))) {
             return response()->json(['error' => 'Forkert e-mail eller adgangskode'], 401);
         }
         request()->session()->regenerate();
