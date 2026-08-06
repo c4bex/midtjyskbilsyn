@@ -32,7 +32,7 @@ class Permission
     {
         return match ($role) {
             'Teknisk ansvarlig / Ejer' => ['bookings.read', 'bookings.write', 'customers.read', 'customers.write', 'imports.write', 'invoices.write', 'employees.write', 'settings.write', 'ai.use', 'ai.documents.write', 'ai.investigations.read', 'ai.investigations.write', 'ai.arvo.send'],
-            'Synsinspektør' => ['bookings.read', 'bookings.write', 'customers.read', 'customers.write', 'ai.use', 'ai.investigations.read', 'ai.investigations.write', 'ai.arvo.send'],
+            'Synsinspektør' => ['bookings.read', 'bookings.write', 'customers.read', 'customers.write'],
             'Bogholder / blæksprut' => ['bookings.read', 'customers.read', 'invoices.write', 'ai.use', 'ai.investigations.read', 'ai.investigations.write'],
             default => [],
         };

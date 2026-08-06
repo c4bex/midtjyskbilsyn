@@ -2,8 +2,19 @@
 
 use App\Http\Controllers\AiAssistantController;
 use App\Http\Controllers\OperationsController;
+use App\Http\Middleware\Permission;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+
+$sessionPayload = static function (): array {
+    $user = Auth::user();
+    $employee = $user ? DB::table('employees')->where('user_id', $user->id)->first() : null;
+    $permissionRows = $employee ? DB::table('employee_permissions')->where('employee_id', $employee->id)->get() : collect();
+    $permissions = $permissionRows->isNotEmpty() ? $permissionRows->where('allowed', true)->pluck('permission_key')->values()->all() : Permission::rolePermissions((string) ($employee?->role ?? ''));
+
+    return ['user' => $user?->only(['id', 'name', 'email']), 'employee' => $employee ? ['id' => (string) $employee->id, 'role' => $employee->role] : null, 'permissions' => $permissions];
+};
 
 Route::middleware('web')->group(function () {
     Route::post('/login', function () {
@@ -13,9 +24,9 @@ Route::middleware('web')->group(function () {
         }
         request()->session()->regenerate();
 
-        return response()->json(['user' => Auth::user()->only(['id', 'name', 'email'])]);
+        return response()->json($sessionPayload());
     })->middleware('throttle:5,1');
-    Route::get('/session', fn () => response()->json(['authenticated' => Auth::check(), 'user' => Auth::user()?->only(['id', 'name', 'email'])]));
+    Route::get('/session', fn () => response()->json(['authenticated' => Auth::check(), ...$sessionPayload()]));
     Route::post('/logout', function () {
         Auth::logout();
         request()->session()->invalidate();

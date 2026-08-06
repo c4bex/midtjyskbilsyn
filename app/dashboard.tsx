@@ -56,6 +56,7 @@ type WeekDay = { date: string; weekday: number; closed: boolean; totalSlots: num
 type SmsTemplate = "booking_confirmation" | "booking_reminder" | "booking_changed" | "booking_cancelled";
 type InspectionType = { id: number; name: string; required_slots: number; is_active: boolean };
 type SearchResult = { type: "booking" | "customer" | "vehicle"; id: string; title: string; subtitle: string; booking?: Booking };
+type SessionData = { authenticated: boolean; employee?: { id: string; role: string } | null; permissions?: string[] };
 
 const nav = [
   { id: "bookings", label: "Bookinger", icon: CalendarDays },
@@ -118,6 +119,8 @@ const emptyForm = { date: currentDate, time: "11:20", customer: "", customerType
 
 export function Dashboard() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [secondaryMenuOpen, setSecondaryMenuOpen] = useState(false);
+  const [sessionPermissions, setSessionPermissions] = useState<string[]>([]);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [activeView, setActiveView] = useState<"bookings" | "customers" | "availability" | "sms" | "invoices" | "employees" | "drift">("bookings");
@@ -152,6 +155,14 @@ export function Dashboard() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
 
+  const visibleNav = nav.filter((item) => item.id === "bookings" ? sessionPermissions.includes("bookings.read") : sessionPermissions.includes("customers.read"));
+  const visibleAdministrationNav = administrationNav.filter((item) => {
+    if (item.id === "employees") return sessionPermissions.includes("employees.write");
+    if (item.id === "availability") return sessionPermissions.includes("settings.write");
+    if (item.id === "sms") return sessionPermissions.includes("settings.write");
+    return sessionPermissions.includes("employees.write") || sessionPermissions.includes("settings.write");
+  });
+
   const visibleBookings = filter === "alle" ? bookings : bookings.filter((booking) => booking.customerType === filter);
   const privateCount = bookings.filter((booking) => booking.customerType === "private").length;
   const businessCount = bookings.length - privateCount;
@@ -174,6 +185,10 @@ export function Dashboard() {
   };
 
   useEffect(() => {
+    fetch("/api/auth/session", { cache: "no-store" }).then((response) => response.ok ? response.json() as Promise<SessionData> : Promise.reject()).then((data) => setSessionPermissions(data.permissions ?? [])).catch(() => setSessionPermissions(["bookings.read", "customers.read"]));
+  }, []);
+
+  useEffect(() => {
     if (searchQuery.trim().length < 2) {
       // Search results are derived from the external API and must be cleared when the query is shortened.
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -194,6 +209,7 @@ export function Dashboard() {
   const navigate = (view: string) => {
     setActiveView(view as "bookings" | "customers" | "availability" | "sms" | "invoices" | "employees" | "drift");
     setMenuOpen(false);
+    setSecondaryMenuOpen(false);
     setModalOpen(false);
   };
 
@@ -416,27 +432,30 @@ export function Dashboard() {
           <span className="live-brand-art" aria-hidden="true" />
         </button>
         <nav className="live-navigation" aria-label="Primær navigation">
-          {[...nav, ...administrationNav].map((item) => {
+          {visibleNav.map((item) => {
             const Icon = item.icon;
             return <button key={item.id} className={activeView === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon size={16} strokeWidth={1.8} /><span>{item.label}</span>{"badge" in item && item.badge && <em>{item.badge}</em>}</button>;
           })}
+          {visibleAdministrationNav.length > 0 && <button className={`live-menu-trigger ${secondaryMenuOpen ? "active" : ""}`} onClick={() => setSecondaryMenuOpen((open) => !open)}><Menu size={16} strokeWidth={1.8} /><span>Menu</span><ChevronDown size={13} /></button>}
         </nav>
         <div className="live-actions">
           <div className="global-search"><Search size={16} /><input value={searchQuery} onFocus={() => searchQuery.length >= 2 && setSearchOpen(true)} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Søg kunde, booking eller reg.nr." aria-label="Søg i systemet" />{searchOpen && <div className="global-search-results">{searchResults.length === 0 ? <span className="search-empty">Ingen resultater</span> : searchResults.map((result) => <button key={`${result.type}-${result.id}`} onClick={() => selectSearchResult(result)}><strong>{result.title}</strong><small>{result.subtitle}{result.type === "booking" ? " · Klik for at redigere" : ""}</small></button>)}</div>}</div>
           <span className="live-location">Ikast</span>
-          <button className="ai-launch-button" aria-label="Åbn fagassistent" onClick={() => setAssistantOpen(true)}><Sparkles size={16} /><span>Fagassistent</span></button>
+          {sessionPermissions.includes("ai.use") && <button className="ai-launch-button" aria-label="Åbn fagassistent" onClick={() => setAssistantOpen(true)}><Sparkles size={16} /><span>Fagassistent</span></button>}
           <button className="icon-button notification" aria-label="Notifikationer" onClick={() => flash("Du har 2 nye driftsbeskeder")}><Bell size={18} /><i /></button>
           <button className="live-profile" aria-label="Profil" onClick={() => setProfileOpen((open) => !open)}><span>RM</span><b>Rasmus</b><ChevronDown size={14} /></button>
           {profileOpen && <div className="live-profile-menu"><button onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}>Log ud</button></div>}
         </div>
       </header>
 
+      {secondaryMenuOpen && visibleAdministrationNav.length > 0 && <nav className="live-subnavigation" aria-label="Flere funktioner">{visibleAdministrationNav.map((item) => { const Icon = item.icon; return <button key={item.id} className={activeView === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon size={15} strokeWidth={1.8} /><span>{item.label}</span>{"badge" in item && item.badge && <em>{item.badge}</em>}</button>; })}</nav>}
+
       {menuOpen && <>
         <button className="scrim live-scrim" aria-label="Luk menu" onClick={() => setMenuOpen(false)} />
         <aside className="live-mobile-nav">
           <div><span className="live-brand-art" aria-hidden="true" /><button aria-label="Luk menu" onClick={() => setMenuOpen(false)}><X size={20} /></button></div>
           <nav aria-label="Mobilnavigation">
-            {[...nav, ...administrationNav].map((item) => { const Icon = item.icon; return <button key={item.id} className={activeView === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon size={18} /><span>{item.label}</span></button>; })}
+            {[...visibleNav, ...visibleAdministrationNav].map((item) => { const Icon = item.icon; return <button key={item.id} className={activeView === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon size={18} /><span>{item.label}</span></button>; })}
           </nav>
         </aside>
       </>}
