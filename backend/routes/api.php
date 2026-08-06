@@ -16,8 +16,8 @@ $sessionPayload = static function (): array {
     return ['user' => $user?->only(['id', 'name', 'email']), 'employee' => $employee ? ['id' => (string) $employee->id, 'role' => $employee->role] : null, 'permissions' => $permissions];
 };
 
-Route::middleware('web')->group(function () {
-    Route::post('/login', function () {
+Route::middleware('web')->group(function () use ($sessionPayload) {
+    Route::post('/login', function () use ($sessionPayload) {
         $credentials = request()->validate(['email' => ['required', 'email'], 'password' => ['required', 'string']]);
         if (! Auth::attempt($credentials)) {
             return response()->json(['error' => 'Forkert e-mail eller adgangskode'], 401);
