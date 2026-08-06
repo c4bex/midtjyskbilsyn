@@ -245,18 +245,23 @@ class OperationsController extends Controller
     {
         $registration = $request->string('plate')->toString() ?: $request->string('registration')->toString();
         if ($this->normalizePlate($registration) === '') {
-            return response()->json(['found' => false], 400);
+            return response()->json(['found' => false, 'dmr' => ['enabled' => filled(config('services.dmr.base_url')), 'status' => 'not_checked']], 400);
         }
         $result = $dmr->lookup($registration);
         if (! ($result['unavailable'] ?? false)) {
+            $vehicle = $result['vehicle'] ?? [];
+            $result['lastInspectionDate'] ??= $vehicle['inspectionDate'] ?? null;
+            $result['inspectionDueDate'] ??= $vehicle['nextInspectionDate'] ?? null;
+            $result['dmr'] = ['enabled' => true, 'status' => 'connected'];
+
             return response()->json($result);
         }
         $vehicle = DB::table('vehicles')->where('registration_normalized', $this->normalizePlate($registration))->first();
         if (! $vehicle) {
-            return response()->json(['found' => false, 'source' => 'local-mysql', 'unavailable' => true]);
+            return response()->json(['found' => false, 'source' => 'local-mysql', 'unavailable' => true, 'dmr' => ['enabled' => filled(config('services.dmr.base_url')), 'status' => 'unavailable']]);
         }
 
-        return response()->json(['found' => true, 'source' => 'local-mysql', 'vehicle' => ['registration' => $this->formatPlate($vehicle->registration_normalized), 'make' => $vehicle->make, 'model' => $vehicle->model], 'unavailable' => true]);
+        return response()->json(['found' => true, 'source' => 'local-mysql', 'vehicle' => ['registration' => $this->formatPlate($vehicle->registration_normalized), 'make' => $vehicle->make, 'model' => $vehicle->model], 'unavailable' => true, 'dmr' => ['enabled' => filled(config('services.dmr.base_url')), 'status' => 'unavailable']]);
     }
 
     public function availability(): JsonResponse

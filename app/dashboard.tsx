@@ -52,7 +52,7 @@ type Booking = {
 };
 
 type CustomerOption = { id: string; name: string; customerType: CustomerType; vehicles: Array<{ id: string; plate: string; vehicle: string }> };
-type VehicleLookup = { found: boolean; source: string; vehicle?: { registration: string; make: string | null; model: string | null }; customer?: { name: string; customerType: CustomerType }; lastInspectionDate?: string | null; inspectionDueDate?: string | null; dmr: { enabled: boolean; status: string } };
+type VehicleLookup = { found: boolean; source: string; vehicle?: { registration: string; make: string | null; model: string | null; inspectionDate?: string | null; nextInspectionDate?: string | null }; customer?: { name: string; customerType: CustomerType }; lastInspectionDate?: string | null; inspectionDueDate?: string | null; dmr?: { enabled: boolean; status: string } };
 type WeekDay = { date: string; weekday: number; closed: boolean; totalSlots: number; bookedSlots: number; availableCapacity?: number; availableSlots: string[]; staffedInspectors?: number };
 type SmsTemplate = "booking_confirmation" | "booking_reminder" | "booking_changed" | "booking_cancelled";
 type InspectionType = { id: number; name: string; required_slots: number; is_active: boolean };
@@ -595,7 +595,7 @@ export function Dashboard() {
                 </div>
                 {lookupLoading && <div className="lookup-card loading"><span className="lookup-spinner" /><span><strong>Slår nummerpladen op…</strong><small>Først i kundearkivet, senere også i DMR</small></span></div>}
                 {!lookupLoading && vehicleLookup?.found && <div className="lookup-card found"><CheckCircle2 size={18} /><span><strong>{vehicleLookup.vehicle?.make} {vehicleLookup.vehicle?.model} fundet</strong><small>Seneste syn: {formatDanishDate(vehicleLookup.lastInspectionDate)}</small><b className="inspection-due">Næste syn: {formatDanishDate(vehicleLookup.inspectionDueDate)}</b></span><em>{vehicleLookup.source === "dmr-nas" ? "DMR" : "Egne data"}</em></div>}
-                {!lookupLoading && vehicleLookup && !vehicleLookup.found && <div className="lookup-card"><ScanSearch size={18} /><span><strong>Nummerpladen blev ikke fundet</strong><small>{vehicleLookup.dmr.status === "connected" ? "DMR-opslaget er gennemført uden resultat." : "DMR er midlertidigt utilgængelig."}</small></span><em>{vehicleLookup.dmr.status === "connected" ? "DMR kontrolleret" : "DMR utilgængelig"}</em></div>}
+                {!lookupLoading && vehicleLookup && !vehicleLookup.found && <div className="lookup-card"><ScanSearch size={18} /><span><strong>Nummerpladen blev ikke fundet</strong><small>{vehicleLookup.dmr?.status === "connected" ? "DMR-opslaget er gennemført uden resultat." : "DMR er midlertidigt utilgængelig."}</small></span><em>{vehicleLookup.dmr?.status === "connected" ? "DMR kontrolleret" : "DMR utilgængelig"}</em></div>}
               </section>
 
               <section className="booking-step time-step">
