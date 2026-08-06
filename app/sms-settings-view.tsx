@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Clock3, MessageSquare, ShieldCheck } from "lucide-react";
+import { Check, Clock3, Copy, ExternalLink, MessageSquare, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type Props = { onNotify: (message: string) => void };
@@ -29,6 +29,9 @@ export function SmsSettingsView({ onNotify }: Props) {
     setSaving(false); onNotify(response.ok ? "SMS-indstillingerne er gemt" : "SMS-indstillingerne kunne ikke gemmes");
   };
   const saveTemplate = async (template: Template) => { const response = await fetch(`/api/sms/templates/${encodeURIComponent(template.code)}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ body: template.body, enabled: template.enabled }) }); if (response.ok) onNotify("SMS-skabelonen er gemt"); };
+  const publicUrl = typeof window === "undefined" ? "https://booking.midtjyskbilsyn.dk/booking" : `${window.location.origin}/booking`;
+  const businessUrl = typeof window === "undefined" ? "https://booking.midtjyskbilsyn.dk/branchekunde" : `${window.location.origin}/branchekunde`;
+  const copyLink = async (url: string) => { await navigator.clipboard?.writeText(url); onNotify("Link kopieret"); };
   return <div className="module-view sms-settings-view">
     <section className="page-heading"><div><p className="eyebrow">Administration · Kommunikation</p><h1>SMS-indstillinger</h1><p>Automatiske beskeder, skabeloner og historik samlet ét sted.</p></div><span className="integration-badge"><i /> GatewayAPI slukket</span></section>
     <section className="settings-grid">
@@ -44,6 +47,7 @@ export function SmsSettingsView({ onNotify }: Props) {
       </article>
     </section>
     <section className="settings-note"><ShieldCheck size={18} /><div><strong>Sikker standard</strong><p>GatewayAPI er ikke aktiveret. Ingen SMS forlader systemet, før integrationen er testet og slået til på serveren.</p></div></section>
+    <section className="settings-card booking-links-card"><div className="settings-card-head"><span className="settings-icon blue"><ExternalLink size={18} /></span><div><h2>Online bookinglinks</h2><p>Find og kopier de links, I kan bruge på hjemmesiden, i Google og i beskeder.</p></div></div><div className="booking-link-row"><div><strong>Privat booking</strong><small>Aktiv · åben for alle kunder</small><code>{publicUrl}</code></div><button className="secondary-button" onClick={() => void copyLink(publicUrl)}><Copy size={14} /> Kopier</button><a className="secondary-button" href="/booking" target="_blank" rel="noreferrer"><ExternalLink size={14} /> Åbn</a></div><div className="booking-link-row"><div><strong>Branchekunde booking</strong><small className="muted">Klargøres · ekstern portal aktiveres senere</small><code>{businessUrl}</code></div><button className="secondary-button" onClick={() => void copyLink(businessUrl)}><Copy size={14} /> Kopier</button><button className="secondary-button" disabled title="Branchekundeportalen er ikke offentlig endnu"><ExternalLink size={14} /> Ikke aktiv</button></div></section>
     <section className="settings-card sms-template-card"><div className="settings-card-head"><span className="settings-icon blue"><MessageSquare size={18} /></span><div><h2>Skabeloner</h2><p>Redigér teksten uden at ændre bookingflowet. Variabler som <code>{"{{date}}"}</code> udfyldes automatisk.</p></div></div>{templates.map((template) => <div className="sms-template-row" key={template.code}><div><strong>{template.name}</strong><small>{template.audience === "private" ? "Privat" : "Erhverv"} · version {template.version}</small></div><textarea value={template.body} maxLength={1600} onChange={(event) => setTemplates((current) => current.map((item) => item.code === template.code ? { ...item, body: event.target.value } : item))} /><div className="template-actions"><small>{template.body.length}/1600 tegn</small><button className="secondary-button" onClick={() => void saveTemplate(template)}>Gem</button></div></div>)}</section>
     <section className="settings-card"><div className="settings-card-head"><span className="settings-icon gray"><Clock3 size={18} /></span><div><h2>SMS-historik</h2><p>Seneste planlagte beskeder og deres status.</p></div></div><div className="sms-history-list">{messages.length === 0 ? <p className="empty-state">Ingen SMS-poster endnu.</p> : messages.map((message) => <div className="sms-history-row" key={message.id}><strong>{message.customer ?? "Kunde"}</strong><span>{message.recipient_masked ?? "—"}</span><span>{message.kind}</span><em>{statusLabel[message.status] ?? message.status}</em></div>)}</div></section>
     <div className="settings-actions"><button className="primary-button" onClick={() => void save()} disabled={saving}><Check size={16} /> {saving ? "Gemmer…" : "Gem indstillinger"}</button></div>
