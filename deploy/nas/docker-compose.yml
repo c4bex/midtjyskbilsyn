@@ -29,7 +29,7 @@ x-api-environment: &api-environment
 x-api-service: &api-service
   image: midtjysk-bilsyn-api:${APP_IMAGE_TAG:-latest}
   build:
-    context: ../../backend
+    context: https://github.com/c4bex/midtjyskbilsyn.git#main:backend
   restart: unless-stopped
   environment: *api-environment
   networks: [app]
@@ -89,7 +89,7 @@ services:
 
   web:
     build:
-      context: ../..
+      context: https://github.com/c4bex/midtjyskbilsyn.git#main
       dockerfile: Dockerfile.web
     restart: unless-stopped
     environment:
