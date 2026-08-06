@@ -53,9 +53,9 @@ test("datamodellen beskytter tider ud fra den aktuelle bemanding", async () => {
   ]);
   assert.match(migration, /booking_capacity/);
   assert.match(migration, /employee_work_rules/);
-  assert.match(controller, /slotCapacity/);
+  assert.match(controller, /availabilityForDate/);
   assert.match(controller, /lockForUpdate/);
-  assert.match(controller, /Tidspunktet er fuldt booket/);
+  assert.match(controller, /Tidspunktet er ikke åbent eller har ikke flere ledige pladser/);
 });
 
 test("danske bookingtider håndterer både sommer- og vintertid", async () => {

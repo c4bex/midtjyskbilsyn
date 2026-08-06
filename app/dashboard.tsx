@@ -51,6 +51,7 @@ type CustomerOption = { id: string; name: string; customerType: CustomerType; ve
 type VehicleLookup = { found: boolean; source: string; vehicle?: { registration: string; make: string | null; model: string | null }; customer?: { name: string; customerType: CustomerType }; lastInspectionDate?: string | null; inspectionDueDate?: string | null; dmr: { enabled: boolean; status: string } };
 type WeekDay = { date: string; weekday: number; closed: boolean; totalSlots: number; bookedSlots: number; availableCapacity?: number; availableSlots: string[]; staffedInspectors?: number };
 type SmsTemplate = "booking_confirmation" | "booking_reminder" | "booking_changed" | "booking_cancelled";
+type InspectionType = { id: number; name: string; required_slots: number; is_active: boolean };
 
 const nav = [
   { id: "bookings", label: "Bookinger", icon: CalendarDays },
@@ -141,6 +142,7 @@ export function Dashboard() {
     { date: "2026-08-04", weekday: 2, closed: false, totalSlots: 23, bookedSlots: 21, availableSlots: ["11:20", "14:20"] },
   ]);
   const [weekLoading, setWeekLoading] = useState(true);
+  const [inspectionTypes, setInspectionTypes] = useState<InspectionType[]>([]);
 
   const visibleBookings = filter === "alle" ? bookings : bookings.filter((booking) => booking.customerType === filter);
   const privateCount = bookings.filter((booking) => booking.customerType === "private").length;
@@ -247,10 +249,16 @@ export function Dashboard() {
     return () => { active = false; };
   }, []);
 
-  const loadSlots = async (date: string) => {
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/planning?date=${selectedDate}`, { cache: "no-store" }).then((response) => response.ok ? response.json() as Promise<{ inspectionTypes: InspectionType[] }> : Promise.reject()).then((data) => { if (active) setInspectionTypes(data.inspectionTypes.filter((type) => type.is_active)); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [selectedDate]);
+
+  const loadSlots = async (date: string, inspection = form.inspection) => {
     setSlotsLoading(true);
     try {
-      const response = await fetch(`/api/bookings?date=${encodeURIComponent(date)}`, { cache: "no-store" });
+      const response = await fetch(`/api/bookings?date=${encodeURIComponent(date)}&inspection=${encodeURIComponent(inspection)}`, { cache: "no-store" });
       const data = await response.json() as { availableSlots?: string[] };
       if (response.ok) setModalSlots(data.availableSlots ?? []);
     } finally { setSlotsLoading(false); }
@@ -540,10 +548,10 @@ export function Dashboard() {
               <section className="booking-step time-step">
                 <div className="step-title"><em>3</em><div><strong>Vælg en ledig tid</strong><span>Kun tider der kan bookes vises</span></div></div>
                 <div className="date-and-type">
-                  <label className="smart-field">Dato<span className="date-with-week"><input type="date" value={form.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => { const date = event.target.value; setForm({ ...form, date, time: "" }); void loadSlots(date); }} /><small>Uge {isoWeek(form.date)}</small></span></label>
-                  <label className="smart-field">Synstype<select value={form.inspection} onChange={(event) => setForm({ ...form, inspection: event.target.value })}><option>Periodisk syn</option><option>Omsyn</option><option>Varebilssyn</option><option>Motorcykelsyn</option></select></label>
+                  <label className="smart-field">Dato<span className="date-with-week"><input type="date" value={form.date} onClick={(event) => event.currentTarget.showPicker?.()} onChange={(event) => { const date = event.target.value; setForm({ ...form, date, time: "" }); void loadSlots(date, form.inspection); }} /><small>Uge {isoWeek(form.date)}</small></span></label>
+                  <label className="smart-field">Synstype<select value={form.inspection} onChange={(event) => { const inspection = event.target.value; setForm({ ...form, inspection, time: "" }); void loadSlots(form.date, inspection); }}>{(inspectionTypes.length ? inspectionTypes : [{ id: 0, name: "Periodisk syn", required_slots: 1, is_active: true }, { id: 0, name: "Omsyn", required_slots: 1, is_active: true }, { id: 0, name: "Varebilssyn", required_slots: 1, is_active: true }, { id: 0, name: "Motorcykelsyn", required_slots: 1, is_active: true }, { id: 0, name: "Toldsyn", required_slots: 2, is_active: true }]).map((type, index) => <option key={`${type.id}-${index}`}>{type.name}</option>)}</select></label>
                 </div>
-                <div className="slot-heading"><span>{slotsLoading ? "Henter ledige tider…" : `${modalSlots.length} ledige tider`}</span><small>20 min. pr. booking</small></div>
+                <div className="slot-heading"><span>{slotsLoading ? "Henter ledige tider…" : `${modalSlots.length} ledige tider`}</span><small>{(inspectionTypes.find((type) => type.name === form.inspection)?.required_slots ?? 1) * 20} min. pr. booking</small></div>
                 <div className="booking-slots">
                   {timeChoices.map((time) => <button className={form.time === time ? "selected" : ""} key={time} onClick={() => setForm({ ...form, time })}><Clock3 size={14} />{time}{form.time === time && <Check size={13} />}</button>)}
                   {!slotsLoading && timeChoices.length === 0 && <p>Ingen ledige tider denne dag.</p>}

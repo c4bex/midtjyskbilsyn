@@ -26,6 +26,12 @@ Route::middleware(['web', 'api.token', 'throttle:120,1'])->group(function () {
     Route::get('/customers', [OperationsController::class, 'customers']);
     Route::get('/vehicles/lookup', [OperationsController::class, 'vehicleLookup']);
     Route::get('/calendar/week', [OperationsController::class, 'calendarWeek']);
+    Route::get('/planning', [OperationsController::class, 'planning']);
+    Route::patch('/planning/inspection-types/{inspectionType}', [OperationsController::class, 'updateInspectionType'])->middleware('permission:settings.write');
+    Route::patch('/planning/profiles/{profile}', [OperationsController::class, 'updateCalendarProfile'])->middleware('permission:settings.write');
+    Route::patch('/planning/days/{date}', [OperationsController::class, 'updatePlanningDay'])->middleware('permission:settings.write');
+    Route::post('/planning/buffers', [OperationsController::class, 'createBuffer'])->middleware('permission:settings.write');
+    Route::delete('/planning/buffers/{buffer}', [OperationsController::class, 'deleteBuffer'])->middleware('permission:settings.write');
     Route::get('/availability', [OperationsController::class, 'availability']);
     Route::patch('/availability', [OperationsController::class, 'updateAvailability'])->middleware('permission:settings.write');
     Route::post('/availability', [OperationsController::class, 'createClosure'])->middleware('permission:settings.write');

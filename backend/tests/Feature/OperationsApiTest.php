@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -19,8 +20,12 @@ class OperationsApiTest extends TestCase
         parent::setUp();
         $this->user = User::factory()->create();
         $employeeId = DB::table('employees')->insertGetId(['user_id' => $this->user->id, 'display_name' => 'Testadministrator', 'role' => 'Teknisk ansvarlig / Ejer', 'active' => true, 'booking_capacity' => true, 'created_at' => now(), 'updated_at' => now()]);
-        foreach (range(1, 5) as $weekday) DB::table('availability_rules')->insert(['kind' => 'opening_hours', 'weekday' => $weekday, 'starts_at' => '08:00', 'ends_at' => '16:00', 'label' => 'Normal åbningstid', 'created_at' => now(), 'updated_at' => now()]);
-        foreach (range(1, 5) as $weekday) DB::table('employee_work_rules')->insert(['employee_id' => $employeeId, 'weekday' => $weekday, 'starts_at' => '08:00', 'ends_at' => '16:00', 'working' => true, 'created_at' => now(), 'updated_at' => now()]);
+        foreach (range(1, 5) as $weekday) {
+            DB::table('availability_rules')->insert(['kind' => 'opening_hours', 'weekday' => $weekday, 'starts_at' => '08:00', 'ends_at' => '16:00', 'label' => 'Normal åbningstid', 'created_at' => now(), 'updated_at' => now()]);
+        }
+        foreach (range(1, 5) as $weekday) {
+            DB::table('employee_work_rules')->insert(['employee_id' => $employeeId, 'weekday' => $weekday, 'starts_at' => '08:00', 'ends_at' => '16:00', 'working' => true, 'created_at' => now(), 'updated_at' => now()]);
+        }
     }
 
     public function test_unauthenticated_requests_are_rejected(): void
@@ -77,6 +82,43 @@ class OperationsApiTest extends TestCase
 
         $final = $this->actingAs($this->user)->getJson('/api/calendar/week?start='.$date)->assertOk();
         $this->assertNotContains('09:20', $final->json('days.0.availableSlots'));
+    }
+
+    public function test_toldsyn_reserves_two_adjacent_booking_slots_as_one_booking(): void
+    {
+        $date = now()->next('Monday')->toDateString();
+        $response = $this->actingAs($this->user)->postJson('/api/bookings', [
+            'customer' => 'Fiktiv Toldsynskunde', 'customerType' => 'business', 'plate' => 'TL12345',
+            'vehicle' => 'Mercedes Sprinter', 'date' => $date, 'time' => '10:00', 'inspection' => 'Toldsyn',
+        ])->assertCreated();
+
+        $bookingId = $response->json('booking.id');
+        $this->assertDatabaseHas('bookings', ['id' => $bookingId, 'slot_count' => 2, 'inspection_type' => 'Toldsyn']);
+        $this->assertSame('10:40:00', CarbonImmutable::parse(DB::table('bookings')->where('id', $bookingId)->value('ends_at'))->format('H:i:s'));
+
+        $available = $this->actingAs($this->user)->getJson('/api/bookings?date='.$date.'&inspection=Toldsyn')
+            ->assertOk()->json('availableSlots');
+        $this->assertNotContains('10:00', $available);
+        $this->actingAs($this->user)->postJson('/api/bookings', [
+            'customer' => 'Anden kunde', 'customerType' => 'business', 'plate' => 'TL12346', 'vehicle' => 'Ford Transit',
+            'date' => $date, 'time' => '10:20', 'inspection' => 'Toldsyn',
+        ])->assertConflict();
+    }
+
+    public function test_planning_returns_profiles_and_buffer_conflicts_without_moving_bookings(): void
+    {
+        $date = now()->next('Monday')->toDateString();
+        $this->actingAs($this->user)->getJson('/api/planning?date='.$date)->assertOk()
+            ->assertJsonFragment(['name' => 'Én medarbejder'])->assertJsonFragment(['name' => 'Toldsyn', 'required_slots' => 2]);
+
+        $bookingId = $this->actingAs($this->user)->postJson('/api/bookings', [
+            'customer' => 'Konfliktkunde', 'customerType' => 'business', 'plate' => 'BF12345', 'vehicle' => 'Ford Focus',
+            'date' => $date, 'time' => '11:00', 'inspection' => 'Periodisk syn',
+        ])->assertCreated()->json('booking.id');
+        $this->actingAs($this->user)->postJson('/api/planning/buffers', [
+            'date' => $date, 'startsAt' => '11:00', 'endsAt' => '11:20', 'reason' => 'Ekstra kontrol',
+        ])->assertCreated()->assertJsonPath('conflicts.0', (string) $bookingId);
+        $this->assertDatabaseHas('vehicles', ['registration_normalized' => 'BF12345']);
     }
 
     public function test_absence_removes_employee_from_booking_capacity(): void
