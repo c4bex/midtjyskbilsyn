@@ -2,9 +2,9 @@
 
 Miljøet kører React-brugerfladen, Laravel API, MySQL, kø, scheduler og backup som separate containere. Kun proxy-porten eksponeres. MySQL kan ikke nås direkte fra netværket.
 
-Webbrugerfladen bygges automatisk af GitHub Actions og udgives som et færdigt
-container-image. NAS'en skal derfor ikke længere køre `npm ci` og bygge hele
-webprojektet ved hver lille designændring.
+Webbrugerfladen udgives som et færdigt container-image, når en testversion
+udtrykkeligt godkendes. Almindelige commits og push til GitHub er kun
+sikkerhedskopiering og ændrer ikke det aktive NAS-testmiljø.
 
 1. Kopiér hele repositoryet til en privat mappe på NAS'en.
 2. Kopiér `deploy/nas/.env.example` til `deploy/nas/.env` og erstat alle pladsholdere lokalt på NAS'en.
@@ -15,10 +15,23 @@ webprojektet ved hver lille designændring.
 7. Åbn `http://<NAS-Tailscale-IP>:4321`. Der må ikke oprettes port-forwarding i routeren.
 8. Restore-test: `docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml --profile maintenance run --rm restore-test`.
 
-## Hurtige designopdateringer
+## Lokal udvikling og kontrolleret testudgivelse
 
-Når en designændring er godkendt og skubbet til `main`, bygger GitHub kun
-web-image'et. Opdatér derefter kun webcontaineren på NAS'en:
+Under aktivt designarbejde bruges `npm run dev` på port `4317`. Ændringer vises
+her med det samme og påvirker ikke andre brugere af NAS-testmiljøet. Koden kan
+fortsat committes og skubbes til `main` som sikkerhedskopi.
+
+Når en samlet ændring udtrykkeligt er godkendt til test, oprettes og skubbes et
+tag med præfikset `test-`, eksempelvis:
+
+```sh
+git tag test-20260806-1530
+git push origin test-20260806-1530
+```
+
+Kun et sådant test-tag (eller en bevidst manuel start af GitHub-workflowet)
+bygger `ghcr.io/c4bex/midtjyskbilsyn-web:test`. Når bygningen er godkendt,
+opdateres kun webcontaineren på NAS'en:
 
 ```sh
 docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml pull web
@@ -28,9 +41,8 @@ docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml up -d
 MySQL, Laravel, DMR, køen og backup fortsætter uændret. En designopdatering
 medfører derfor ingen databasemigrering og ingen genstart af DMR.
 
-Under aktivt designarbejde bruges `npm run dev` på port `4317`. Ændringer vises
-her med det samme. NAS-testlinket opdateres først, når ændringen er samlet,
-testet og skubbet til GitHub.
+NAS-testlinket ændres dermed først, når ændringen både er godkendt, bygget og
+webcontaineren bevidst er opdateret.
 
 ## Sikkerhed og drift
 

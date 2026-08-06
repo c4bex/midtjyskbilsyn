@@ -1,19 +1,9 @@
-name: Byg web-image
+name: Udgiv web til NAS-test
 
 on:
   push:
-    branches: [main]
-    paths:
-      - "app/**"
-      - "public/**"
-      - ".openai/**"
-      - "package.json"
-      - "package-lock.json"
-      - "vite.config.ts"
-      - "tsconfig.json"
-      - "next.config.ts"
-      - "Dockerfile.web"
-      - ".github/workflows/build-web-image.yml"
+    tags:
+      - "test-*"
   workflow_dispatch:
 
 permissions:
