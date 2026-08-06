@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
@@ -521,14 +522,34 @@ class OperationsController extends Controller
     public function employees(): JsonResponse
     {
         $permissionRows = DB::table('employee_permissions')->get()->groupBy('employee_id');
+        $departments = Schema::hasTable('departments') ? DB::table('departments')->where('active', true)->orderBy('name')->get(['id', 'name']) : collect();
         $employees = DB::table('employees')->orderBy('display_name')->get()->map(function ($employee) use ($permissionRows) {
             $rows = $permissionRows->get($employee->id, collect());
             $allowed = $rows->isNotEmpty() ? $rows->where('allowed', true)->pluck('permission_key')->values()->all() : Permission::rolePermissions((string) $employee->role);
 
-            return ['id' => (string) $employee->id, 'name' => $employee->display_name, 'role' => $employee->role, 'active' => (bool) $employee->active, 'bookingCapacity' => (bool) $employee->booking_capacity, 'permissions' => $allowed];
+            $user = $employee->user_id ? DB::table('users')->where('id', $employee->user_id)->first(['email', 'last_login_at']) : null;
+            return [
+                'id' => (string) $employee->id,
+                'name' => $employee->display_name,
+                'initials' => $employee->initials ?: $this->employeeInitials($employee->display_name),
+                'employeeNumber' => $employee->employee_number,
+                'role' => $employee->role,
+                'jobTitle' => $employee->job_title ?: $employee->role,
+                'status' => $employee->status ?: ($employee->active ? 'ACTIVE' : 'INACTIVE'),
+                'active' => (bool) $employee->active,
+                'archived' => (bool) ($employee->archived ?? false),
+                'startDate' => $employee->start_date,
+                'endDate' => $employee->end_date,
+                'email' => $employee->email ?: $user?->email,
+                'loginStatus' => $user ? ($employee->active ? 'ACTIVE' : 'DISABLED') : 'NONE',
+                'lastLoginAt' => $user?->last_login_at,
+                'bookingCapacity' => (bool) $employee->booking_capacity,
+                'permissions' => $allowed,
+                'departments' => Schema::hasTable('employee_departments') ? DB::table('employee_departments')->join('departments', 'departments.id', '=', 'employee_departments.department_id')->where('employee_departments.employee_id', $employee->id)->where('employee_departments.active_to', null)->pluck('departments.name')->values()->all() : [],
+            ];
         });
 
-        return response()->json(['permissionCatalog' => Permission::catalog(), 'employees' => $employees, 'absences' => DB::table('employee_absences')->orderBy('date_from')->get(), 'workRules' => DB::table('employee_work_rules')->orderBy('employee_id')->orderBy('weekday')->get()]);
+        return response()->json(['permissionCatalog' => Permission::catalog(), 'employees' => $employees, 'departments' => $departments, 'absences' => DB::table('employee_absences')->orderBy('date_from')->get(), 'workRules' => DB::table('employee_work_rules')->orderBy('employee_id')->orderBy('weekday')->get()]);
     }
 
     public function businessPortalCompanies(): JsonResponse
@@ -566,19 +587,56 @@ class OperationsController extends Controller
     public function updateEmployee(Request $request): JsonResponse
     {
         $type = $request->string('type')->toString();
+        if ($type === 'employee_create') {
+            $data = $request->validate([
+                'displayName' => ['required', 'string', 'max:160'],
+                'initials' => ['nullable', 'string', 'max:8'],
+                'employeeNumber' => ['nullable', 'string', 'max:40', 'unique:employees,employee_number'],
+                'email' => ['nullable', 'email', 'max:255', 'unique:employees,email'],
+                'role' => ['required', 'string', 'max:80'],
+                'jobTitle' => ['nullable', 'string', 'max:160'],
+                'status' => ['required', 'in:ACTIVE,UPCOMING,INACTIVE,TERMINATED,ARCHIVED'],
+                'startDate' => ['nullable', 'date'],
+                'endDate' => ['nullable', 'date', 'after_or_equal:startDate'],
+                'bookingCapacity' => ['required', 'boolean'],
+                'departmentId' => ['nullable', 'integer', 'exists:departments,id'],
+            ]);
+            $id = DB::transaction(function () use ($data) {
+                $id = DB::table('employees')->insertGetId([
+                    'display_name' => trim($data['displayName']),
+                    'initials' => $data['initials'] ?: $this->employeeInitials($data['displayName']),
+                    'employee_number' => $data['employeeNumber'] ?? null,
+                    'email' => $data['email'] ?? null,
+                    'role' => $data['role'],
+                    'job_title' => $data['jobTitle'] ?? $data['role'],
+                    'status' => $data['status'],
+                    'active' => in_array($data['status'], ['ACTIVE', 'UPCOMING'], true),
+                    'start_date' => $data['startDate'] ?? null,
+                    'end_date' => $data['endDate'] ?? null,
+                    'booking_capacity' => $data['bookingCapacity'],
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+                if (! empty($data['departmentId']) && Schema::hasTable('employee_departments')) {
+                    DB::table('employee_departments')->insert(['employee_id' => $id, 'department_id' => $data['departmentId'], 'is_primary' => true, 'created_at' => now(), 'updated_at' => now()]);
+                }
+                $this->audit('employee.created', 'employee', $id, null, $data);
+                return $id;
+            });
+            return response()->json(['id' => (string) $id], 201);
+        }
         if ($type === 'employee_update') {
-            $data = $request->validate(['employeeId' => ['required', 'integer', 'exists:employees,id'], 'displayName' => ['required', 'string', 'max:160'], 'role' => ['required', 'string', 'max:80'], 'active' => ['required', 'boolean'], 'bookingCapacity' => ['required', 'boolean']]);
-            DB::table('employees')->where('id', $data['employeeId'])->update(['display_name' => $data['displayName'], 'role' => $data['role'], 'active' => $data['active'], 'booking_capacity' => $data['bookingCapacity'], 'updated_at' => now()]);
+            $data = $request->validate(['employeeId' => ['required', 'integer', 'exists:employees,id'], 'displayName' => ['required', 'string', 'max:160'], 'initials' => ['nullable', 'string', 'max:8'], 'role' => ['required', 'string', 'max:80'], 'jobTitle' => ['nullable', 'string', 'max:160'], 'status' => ['nullable', 'in:ACTIVE,UPCOMING,INACTIVE,TERMINATED,ARCHIVED'], 'active' => ['required', 'boolean'], 'bookingCapacity' => ['required', 'boolean'], 'startDate' => ['nullable', 'date'], 'endDate' => ['nullable', 'date', 'after_or_equal:startDate']]);
+            DB::table('employees')->where('id', $data['employeeId'])->update(['display_name' => trim($data['displayName']), 'initials' => $data['initials'] ?: $this->employeeInitials($data['displayName']), 'role' => $data['role'], 'job_title' => $data['jobTitle'] ?? $data['role'], 'status' => $data['status'] ?? ($data['active'] ? 'ACTIVE' : 'INACTIVE'), 'active' => $data['active'], 'booking_capacity' => $data['bookingCapacity'], 'start_date' => $data['startDate'] ?? null, 'end_date' => $data['endDate'] ?? null, 'updated_at' => now()]);
             $this->audit('employee.updated', 'employee', $data['employeeId'], null, $data);
 
             return response()->json(['ok' => true]);
         }
         if ($type === 'work_rule') {
-            $data = $request->validate(['employeeId' => ['required', 'integer', 'exists:employees,id'], 'weekday' => ['required', 'integer', 'between:1,7'], 'startsAt' => ['nullable', 'date_format:H:i'], 'endsAt' => ['nullable', 'date_format:H:i'], 'working' => ['required', 'boolean'], 'cycleWeeks' => ['nullable', 'integer', 'between:1,6'], 'cycleWeek' => ['nullable', 'integer', 'between:1,6']]);
+            $data = $request->validate(['employeeId' => ['required', 'integer', 'exists:employees,id'], 'weekday' => ['required', 'integer', 'between:1,7'], 'startsAt' => ['nullable', 'date_format:H:i'], 'endsAt' => ['nullable', 'date_format:H:i'], 'working' => ['required', 'boolean'], 'cycleWeeks' => ['nullable', 'integer', 'between:1,3'], 'cycleWeek' => ['nullable', 'integer', 'between:1,3'], 'anchorMondayDate' => ['nullable', 'date'], 'validFrom' => ['nullable', 'date'], 'validTo' => ['nullable', 'date', 'after_or_equal:validFrom']]);
             $cycleWeeks = (int) ($data['cycleWeeks'] ?? 1);
             $cycleWeek = (int) ($data['cycleWeek'] ?? 1);
             abort_if($cycleWeek > $cycleWeeks, 422, 'Uge i rul skal være inden for rullets længde');
-            DB::table('employee_work_rules')->updateOrInsert(['employee_id' => $data['employeeId'], 'weekday' => $data['weekday']], ['starts_at' => $data['startsAt'] ?? null, 'ends_at' => $data['endsAt'] ?? null, 'working' => $data['working'], 'cycle_weeks' => $cycleWeeks, 'cycle_week' => $cycleWeek, 'created_at' => now(), 'updated_at' => now()]);
+            DB::table('employee_work_rules')->updateOrInsert(['employee_id' => $data['employeeId'], 'weekday' => $data['weekday']], ['starts_at' => $data['startsAt'] ?? null, 'ends_at' => $data['endsAt'] ?? null, 'working' => $data['working'], 'cycle_weeks' => $cycleWeeks, 'cycle_week' => $cycleWeek, 'anchor_monday_date' => $data['anchorMondayDate'] ?? null, 'valid_from' => $data['validFrom'] ?? null, 'valid_to' => $data['validTo'] ?? null, 'active' => true, 'created_at' => now(), 'updated_at' => now()]);
             $this->audit('employee.work_rule.updated', 'employee', $data['employeeId'], null, $data);
 
             return response()->json(['ok' => true]);
@@ -1048,12 +1106,20 @@ class OperationsController extends Controller
         $dailyBuffers = DB::table('buffer_slots')->whereDate('date', $date)->get();
         $buffers = $buffers->concat($dailyBuffers);
         $slots = $this->timeSlots($openingStart, $openingEnd, $buffers, $interval);
-        $employeeIds = DB::table('employees')->where('active', true)->where('booking_capacity', true)->pluck('id');
-        $absentIds = DB::table('employee_absences')->whereIn('employee_id', $employeeIds)->whereDate('date_from', '<=', $day)->whereDate('date_to', '>=', $day)->pluck('employee_id')->all();
-        $cycleWeek = (($day->isoWeek() - 1) % 6) + 1;
-        $workRules = DB::table('employee_work_rules')->whereIn('employee_id', $employeeIds)->where('weekday', $day->isoWeekday())->where('working', true)->get()->filter(function ($rule) use ($cycleWeek) {
-            $cycleWeeks = max(1, (int) ($rule->cycle_weeks ?? 1));
-            $activeCycleWeek = (($cycleWeek - 1) % $cycleWeeks) + 1;
+        $employeeIds = DB::table('employees')->where('active', true)->where('booking_capacity', true)->when(Schema::hasColumn('employees', 'archived'), fn ($query) => $query->where('archived', false))->pluck('id');
+        $absentIds = DB::table('employee_absences')->whereIn('employee_id', $employeeIds)->whereDate('date_from', '<=', $day)->whereDate('date_to', '>=', $day)->get()->filter(function ($absence) use ($day) {
+            if (empty($absence->start_at) || empty($absence->end_at) || (bool) ($absence->all_day ?? true)) return true;
+            return CarbonImmutable::parse($absence->start_at)->lt($day->endOfDay()) && CarbonImmutable::parse($absence->end_at)->gt($day->startOfDay());
+        })->pluck('employee_id')->all();
+        $anchorFallback = CarbonImmutable::parse('2026-08-03')->startOfWeek(CarbonImmutable::MONDAY);
+        $workRules = DB::table('employee_work_rules')->whereIn('employee_id', $employeeIds)->where('weekday', $day->isoWeekday())->where('working', true)->get()->filter(function ($rule) use ($day, $anchorFallback) {
+            if (isset($rule->active) && ! (bool) $rule->active) return false;
+            if (! empty($rule->valid_from) && $day->lt(CarbonImmutable::parse($rule->valid_from))) return false;
+            if (! empty($rule->valid_to) && $day->gt(CarbonImmutable::parse($rule->valid_to))) return false;
+            $cycleWeeks = max(1, min(3, (int) ($rule->cycle_weeks ?? 1)));
+            $anchor = ! empty($rule->anchor_monday_date) ? CarbonImmutable::parse($rule->anchor_monday_date)->startOfWeek(CarbonImmutable::MONDAY) : $anchorFallback;
+            $weeksSinceAnchor = (int) floor($anchor->diffInDays($day->startOfWeek(CarbonImmutable::MONDAY), false) / 7);
+            $activeCycleWeek = (($weeksSinceAnchor % $cycleWeeks) + $cycleWeeks) % $cycleWeeks + 1;
 
             return (int) ($rule->cycle_week ?? 1) === $activeCycleWeek;
         })->reject(fn ($rule) => in_array($rule->employee_id, $absentIds, true));
@@ -1108,5 +1174,14 @@ class OperationsController extends Controller
         }
 
         return $slots;
+    }
+
+    private function employeeInitials(string $name): string
+    {
+        $parts = collect(preg_split('/\s+/', trim($name)) ?: [])->filter()->values();
+        if ($parts->count() > 1) {
+            return mb_strtoupper(mb_substr($parts->first(), 0, 1).mb_substr($parts->last(), 0, 1));
+        }
+        return mb_strtoupper(mb_substr((string) $parts->first(), 0, 2)) ?: 'MB';
     }
 }

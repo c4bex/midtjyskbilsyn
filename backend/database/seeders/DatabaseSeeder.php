@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class DatabaseSeeder extends Seeder
 {
@@ -31,7 +32,16 @@ class DatabaseSeeder extends Seeder
             ['Rasmus Havn Mouritzen', 'Teknisk ansvarlig / Ejer'],
             ['Pernille Havn Mouritzen', 'Bogholder / blæksprut'],
         ] as [$name, $role]) {
-            DB::table('employees')->updateOrInsert(['display_name' => $name], ['user_id' => $name === 'Rasmus Havn Mouritzen' ? $admin?->id : null, 'role' => $role, 'active' => true, 'booking_capacity' => in_array($role, ['Synsinspektør', 'Teknisk ansvarlig / Ejer'], true), 'updated_at' => now(), 'created_at' => now()]);
+            $nameParts = collect(preg_split('/\s+/', $name))->filter()->values();
+            $initials = mb_strtoupper(mb_substr($nameParts->first(), 0, 1).mb_substr($nameParts->last(), 0, 1));
+            DB::table('employees')->updateOrInsert(['display_name' => $name], ['user_id' => $name === 'Rasmus Havn Mouritzen' ? $admin?->id : null, 'initials' => $initials, 'job_title' => $role, 'role' => $role, 'status' => 'ACTIVE', 'active' => true, 'booking_capacity' => in_array($role, ['Synsinspektør', 'Teknisk ansvarlig / Ejer'], true), 'updated_at' => now(), 'created_at' => now()]);
+        }
+
+        if (Schema::hasTable('departments') && Schema::hasTable('employee_departments')) {
+            $ikast = DB::table('departments')->where('name', 'Ikast')->value('id');
+            if ($ikast) {
+                DB::table('employees')->get()->each(fn ($employee) => DB::table('employee_departments')->updateOrInsert(['employee_id' => $employee->id, 'department_id' => $ikast], ['is_primary' => true, 'created_at' => now(), 'updated_at' => now()]));
+            }
         }
 
         $private = DB::table('customers')->updateOrInsert(

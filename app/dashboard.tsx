@@ -159,7 +159,7 @@ export function Dashboard() {
 
   const visibleNav = nav.filter((item) => item.id === "bookings" ? sessionPermissions.includes("bookings.read") : sessionPermissions.includes("customers.read"));
   const visibleAdministrationNav = administrationNav.filter((item) => {
-    if (item.id === "employees") return sessionPermissions.includes("employees.write");
+    if (item.id === "employees") return sessionPermissions.includes("employees.read") || sessionPermissions.includes("employees.write");
     if (item.id === "availability") return sessionPermissions.includes("settings.write");
     if (item.id === "portal") return sessionPermissions.includes("settings.write");
     if (item.id === "sms") return sessionPermissions.includes("settings.write");
