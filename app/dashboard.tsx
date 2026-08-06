@@ -23,7 +23,6 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import Image from "next/image";
 import { AvailabilityView } from "./availability-view";
 import { CustomersView } from "./customers-view";
 import { SmsSettingsView } from "./sms-settings-view";
@@ -320,7 +319,7 @@ export function Dashboard() {
       <header className="live-topbar">
         <button className="live-menu-button" aria-label="Åbn menu" onClick={() => setMenuOpen(true)}><Menu size={21} /></button>
         <button className="live-brand" onClick={() => navigate("bookings")} aria-label="Gå til bookingoverblikket">
-          <Image src="/midtjysk-bilsyn-logo.png" alt="Midtjysk Bilsyn" width={190} height={48} priority />
+          <span className="live-brand-art" aria-hidden="true" />
         </button>
         <nav className="live-navigation" aria-label="Primær navigation">
           {[...nav, ...administrationNav].map((item) => {
@@ -339,7 +338,7 @@ export function Dashboard() {
       {menuOpen && <>
         <button className="scrim live-scrim" aria-label="Luk menu" onClick={() => setMenuOpen(false)} />
         <aside className="live-mobile-nav">
-          <div><Image src="/midtjysk-bilsyn-logo.png" alt="Midtjysk Bilsyn" width={175} height={47} /><button aria-label="Luk menu" onClick={() => setMenuOpen(false)}><X size={20} /></button></div>
+          <div><span className="live-brand-art" aria-hidden="true" /><button aria-label="Luk menu" onClick={() => setMenuOpen(false)}><X size={20} /></button></div>
           <nav aria-label="Mobilnavigation">
             {[...nav, ...administrationNav].map((item) => { const Icon = item.icon; return <button key={item.id} className={activeView === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon size={18} /><span>{item.label}</span></button>; })}
           </nav>
