@@ -221,6 +221,20 @@ export function Dashboard() {
     setWeekStart((current) => addDays(current, days));
   };
 
+  const goToCurrentWeek = () => {
+    const currentDate = "2026-08-04";
+    const currentWeekStart = startOfWeek(currentDate);
+    setSelectedDate(currentDate);
+    setCalendarMonth(currentDate.slice(0, 7));
+    setMonthPickerOpen(false);
+    if (weekStart === currentWeekStart) {
+      setWeekLoading(false);
+      return;
+    }
+    setWeekLoading(true);
+    setWeekStart(currentWeekStart);
+  };
+
   useEffect(() => {
     let active = true;
     fetch("/api/customers", { cache: "no-store" })
@@ -278,11 +292,16 @@ export function Dashboard() {
   };
 
   const selectCalendarDate = (date: string) => {
-    setWeekLoading(true);
+    const selectedWeekStart = startOfWeek(date);
     setSelectedDate(date);
-    setWeekStart(startOfWeek(date));
     setCalendarMonth(date.slice(0, 7));
     setMonthPickerOpen(false);
+    if (selectedWeekStart !== weekStart) {
+      setWeekLoading(true);
+      setWeekStart(selectedWeekStart);
+    } else {
+      setWeekLoading(false);
+    }
   };
 
   const changeCalendarMonth = (amount: number) => {
@@ -392,6 +411,8 @@ export function Dashboard() {
             <div className="heading-actions"><div className="heading-stats"><span><strong>{bookings.length}</strong> bookinger</span><span><strong>{availableSlots.length}</strong> ledige</span></div><button className="primary-button" onClick={() => openCreate()}><Plus size={18} /> Ny booking</button></div>
           </section>
 
+          <div className="day-layout">
+            <div className="booking-column">
           <section className="week-capacity" aria-label={`Kapacitet for uge ${weekNumber}`}>
             <div className="week-capacity-head">
               <div className="week-identity"><span>UGE</span><strong>{weekNumber}</strong></div>
@@ -409,7 +430,7 @@ export function Dashboard() {
                   <button className="month-picker-today" onClick={() => selectCalendarDate("2026-08-04")}>Gå til i dag</button>
                 </div>}
               </div>
-              <div className="week-navigation"><button aria-label="Forrige uge" onClick={() => changeWeek(-7)}><ChevronLeft size={18} /></button><button onClick={() => { setWeekLoading(true); setWeekStart("2026-08-03"); }}>Denne uge</button><button aria-label="Næste uge" onClick={() => changeWeek(7)}><ChevronRight size={18} /></button></div>
+              <div className="week-navigation"><button aria-label="Forrige uge" onClick={() => changeWeek(-7)}><ChevronLeft size={18} /></button><button onClick={goToCurrentWeek}>Denne uge</button><button aria-label="Næste uge" onClick={() => changeWeek(7)}><ChevronRight size={18} /></button></div>
             </div>
             <div className={`capacity-days ${weekLoading ? "loading" : ""}`}>
               {weekDays.map((day) => {
@@ -426,7 +447,6 @@ export function Dashboard() {
             <div className="week-capacity-foot"><span><i className="green-dot" /> Klik på en grøn dag for at booke</span><span><i className="gray-dot" /> Lukket</span></div>
           </section>
 
-          <div className="day-layout">
             <section className="booking-list-card">
               <div className="list-toolbar">
                 <div><h2>{dayNames[new Date(`${selectedDate}T12:00:00Z`).getUTCDay() === 0 ? 6 : new Date(`${selectedDate}T12:00:00Z`).getUTCDay() - 1]} den {dayNumber(selectedDate)}. {monthName(selectedDate)}</h2><span>Sorteret efter tidspunkt</span></div>
@@ -458,6 +478,7 @@ export function Dashboard() {
                 </div>
               </div>
             </section>
+            </div>
 
             <aside className="day-aside">
               <section className="available-card">

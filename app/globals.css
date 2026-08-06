@@ -326,6 +326,7 @@ main { grid-column: 2; min-width: 0; }
 }
 .live-design .week-capacity-head { min-height: 66px; padding: 10px 14px; }
 .live-design .week-capacity { overflow: visible; }
+.live-design .booking-column > .week-capacity { margin-bottom: 0; }
 .live-design .week-identity { width: 60px; height: 48px; flex-basis: 60px; border-radius: 10px; }
 .live-design .week-identity span { font-size: 8px; }
 .live-design .week-identity strong { font-size: 23px; }
@@ -471,9 +472,11 @@ main { grid-column: 2; min-width: 0; }
 .live-design .closure-form select { font-size: 10px; }
 
 @media (min-width: 1101px) {
-  .live-design .workspace { grid-template-columns: minmax(0,1fr) 310px; column-gap: 16px; }
+  .live-design .workspace { display: block; }
+  .live-design .day-layout { display: grid; grid-template-columns: minmax(0,1fr) 310px; align-items: start; gap: 16px; }
+  .live-design .booking-column { min-width: 0; display: grid; align-content: start; gap: 13px; }
   .live-design .workspace > .day-layout > .day-aside {
-    position: sticky; top: 86px; width: auto; grid-column: 2; grid-row: 2 / 4;
+    position: sticky; top: 86px; width: auto; grid-column: 2;
   }
 }
 
@@ -485,8 +488,10 @@ main { grid-column: 2; min-width: 0; }
 @media (max-width: 820px) {
   .live-design .workspace { padding: 18px 16px 32px; }
   .live-design .day-layout { display: grid; grid-template-columns: 1fr; }
-  .live-design .day-aside { grid-row: 1; }
-  .live-design .booking-list-card { grid-row: 2; }
+  .live-design .booking-column { display: contents; }
+  .live-design .week-capacity { grid-row: 1; }
+  .live-design .day-aside { grid-row: 2; }
+  .live-design .booking-list-card { grid-row: 3; }
   .live-design .available-times { grid-template-columns: repeat(3,minmax(0,1fr)); }
 }
 
