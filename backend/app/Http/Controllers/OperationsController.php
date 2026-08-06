@@ -150,7 +150,7 @@ class OperationsController extends Controller
             'cvrNumber' => ['nullable', 'string', 'max:20'], 'address' => ['nullable', 'string', 'max:160'], 'postalCode' => ['nullable', 'string', 'max:12'], 'city' => ['nullable', 'string', 'max:100'],
             'contactName' => ['nullable', 'string', 'max:120'], 'contactEmail' => ['nullable', 'email', 'max:160'], 'invoiceEmail' => ['nullable', 'email', 'max:160'], 'invoiceCc' => ['nullable', 'email', 'max:160'],
             'billingMethod' => ['required', 'in:email,efaktura,manual,none'], 'paymentTerms' => ['required', 'in:netto_8,netto_14,netto_30,immediate'], 'eanGln' => ['nullable', 'regex:/^\d{13}$/'], 'pNumber' => ['nullable', 'string', 'max:20'],
-            'requiresRequisition' => ['required', 'boolean'],
+            'requiresRequisition' => ['nullable', 'boolean'],
         ]);
         $values = collect($data)->mapWithKeys(fn ($value, $key) => [Str::snake($key) => $value])->all();
         DB::table('customer_billing_profiles')->updateOrInsert(['customer_id' => $customer], $values + ['created_at' => now(), 'updated_at' => now()]);
