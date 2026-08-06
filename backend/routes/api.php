@@ -24,6 +24,7 @@ Route::middleware(['web', 'api.token', 'throttle:120,1'])->group(function () {
     Route::patch('/bookings/{booking}', [OperationsController::class, 'updateBooking'])->middleware('permission:bookings.write');
     Route::delete('/bookings/{booking}', fn (int $booking) => DB::table('bookings')->where('id', $booking)->update(['status' => 'cancelled', 'updated_at' => now()]) ? response()->json(['ok' => true]) : response()->json(['error' => 'Bookingen findes ikke'], 404))->middleware('permission:bookings.write');
     Route::get('/customers', [OperationsController::class, 'customers']);
+    Route::patch('/customers/{customer}/billing', [OperationsController::class, 'updateCustomerBilling'])->middleware('permission:customers.write');
     Route::get('/vehicles/lookup', [OperationsController::class, 'vehicleLookup']);
     Route::get('/calendar/week', [OperationsController::class, 'calendarWeek']);
     Route::get('/planning', [OperationsController::class, 'planning']);

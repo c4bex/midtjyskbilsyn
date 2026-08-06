@@ -137,10 +137,26 @@ class OperationsController extends Controller
             $vehicles = DB::table('vehicles')->where('customer_id', $customer->id)->get()->map(fn ($vehicle) => ['id' => (string) $vehicle->id, 'plate' => $this->formatPlate($vehicle->registration_normalized), 'vehicle' => trim(($vehicle->make ?? '').' '.($vehicle->model ?? ''))]);
             $history = DB::table('bookings')->where('customer_id', $customer->id)->latest('starts_at')->get()->map(fn ($booking) => ['id' => (string) $booking->id, 'date' => CarbonImmutable::parse($booking->starts_at)->format('Y-m-d'), 'time' => CarbonImmutable::parse($booking->starts_at)->format('H:i'), 'inspection' => $booking->inspection_type, 'status' => $booking->status]);
 
-            return ['id' => (string) $customer->id, 'name' => $customer->display_name, 'customerType' => $customer->customer_type, 'vehicles' => $vehicles, 'history' => $history];
+            return ['id' => (string) $customer->id, 'name' => $customer->display_name, 'customerType' => $customer->customer_type, 'vehicles' => $vehicles, 'history' => $history, 'billing' => DB::table('customer_billing_profiles')->where('customer_id', $customer->id)->first()];
         });
 
         return response()->json(['customers' => $customers]);
+    }
+
+    public function updateCustomerBilling(Request $request, int $customer): JsonResponse
+    {
+        abort_unless(DB::table('customers')->where('id', $customer)->exists(), 404, 'Kunden findes ikke');
+        $data = $request->validate([
+            'cvrNumber' => ['nullable', 'string', 'max:20'], 'address' => ['nullable', 'string', 'max:160'], 'postalCode' => ['nullable', 'string', 'max:12'], 'city' => ['nullable', 'string', 'max:100'],
+            'contactName' => ['nullable', 'string', 'max:120'], 'contactEmail' => ['nullable', 'email', 'max:160'], 'invoiceEmail' => ['nullable', 'email', 'max:160'], 'invoiceCc' => ['nullable', 'email', 'max:160'],
+            'billingMethod' => ['required', 'in:email,efaktura,manual,none'], 'paymentTerms' => ['required', 'in:netto_8,netto_14,netto_30,immediate'], 'eanGln' => ['nullable', 'regex:/^\d{13}$/'], 'pNumber' => ['nullable', 'string', 'max:20'],
+            'requiresRequisition' => ['required', 'boolean'],
+        ]);
+        $values = collect($data)->mapWithKeys(fn ($value, $key) => [Str::snake($key) => $value])->all();
+        DB::table('customer_billing_profiles')->updateOrInsert(['customer_id' => $customer], $values + ['created_at' => now(), 'updated_at' => now()]);
+        $this->audit('customer.billing.updated', 'customer', $customer, null, $data);
+
+        return response()->json(['billing' => DB::table('customer_billing_profiles')->where('customer_id', $customer)->first()]);
     }
 
     public function vehicleLookup(Request $request, DmrLookupService $dmr): JsonResponse

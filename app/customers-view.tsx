@@ -3,10 +3,12 @@
 import { Building2, CalendarDays, CarFront, ChevronRight, Search, UserRound, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+type BillingProfile = { cvr_number?: string; contact_name?: string; invoice_email?: string; billing_method?: "email" | "efaktura" | "manual" | "none"; payment_terms?: "netto_8" | "netto_14" | "netto_30" | "immediate"; ean_gln?: string; requires_requisition?: boolean };
 type Customer = {
   id: string; name: string; customerType: "private" | "business";
   vehicles: Array<{ id: string; plate: string; vehicle: string }>;
   history: Array<{ id: string; date: string; time: string; inspection: string; status: string }>;
+  billing?: BillingProfile | null;
 };
 
 const statusLabel: Record<string, string> = { completed: "Gennemført", confirmed: "Booket", arrived: "Ankommet", awaiting_confirmation: "Afventer", cancelled: "Aflyst" };
@@ -18,6 +20,9 @@ export function CustomersView({ onNotify }: { onNotify: (message: string) => voi
   const [filter, setFilter] = useState<"all" | "private" | "business">("all");
   const [selected, setSelected] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(true);
+  const [billing, setBilling] = useState<BillingProfile>({ billing_method: "email", payment_terms: "netto_14", requires_requisition: false });
+
+  useEffect(() => { setBilling({ billing_method: "email", payment_terms: "netto_14", requires_requisition: false, ...(selected?.billing ?? {}) }); }, [selected]);
 
   useEffect(() => {
     let active = true;
@@ -35,6 +40,14 @@ export function CustomersView({ onNotify }: { onNotify: (message: string) => voi
     return typeMatch && text.includes(query.trim().toLowerCase());
   }), [customers, filter, query]);
   const privateCount = customers.filter((customer) => customer.customerType === "private").length;
+  const saveBilling = async () => {
+    if (!selected || selected.customerType !== "business") return;
+    const response = await fetch(`/api/customers/${selected.id}/billing`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(billing) });
+    if (!response.ok) { onNotify("Faktureringsopsætningen kunne ikke gemmes"); return; }
+    setCustomers((current) => current.map((customer) => customer.id === selected.id ? { ...customer, billing } : customer));
+    setSelected((current) => current ? { ...current, billing } : current);
+    onNotify("Kundens faktureringsopsætning er gemt");
+  };
 
   return (
     <div className="module-view">
@@ -88,6 +101,7 @@ export function CustomersView({ onNotify }: { onNotify: (message: string) => voi
             <div className="history-list">
               {selected.history.map((booking) => <article key={booking.id}><span className="history-icon"><CalendarDays size={15} /></span><div><strong>{danishDate(booking.date)} kl. {booking.time}</strong><small>{booking.inspection}</small></div><em>{statusLabel[booking.status] ?? booking.status}</em></article>)}
             </div>
+            {selected.customerType === "business" && <><h3>Fakturering</h3><div className="billing-form"><label>CVR-nummer<input value={billing.cvr_number ?? ""} onChange={(event) => setBilling({ ...billing, cvr_number: event.target.value })} placeholder="Fx 12345678" /></label><label>Fakturamail<input type="email" value={billing.invoice_email ?? ""} onChange={(event) => setBilling({ ...billing, invoice_email: event.target.value })} placeholder="faktura@firma.dk" /></label><label>Metode<select value={billing.billing_method} onChange={(event) => setBilling({ ...billing, billing_method: event.target.value as BillingProfile["billing_method"] })}><option value="email">E-mailfaktura</option><option value="efaktura">E-faktura</option><option value="manual">Manuel</option><option value="none">Ingen</option></select></label><label>Betaling<select value={billing.payment_terms} onChange={(event) => setBilling({ ...billing, payment_terms: event.target.value as BillingProfile["payment_terms"] })}><option value="netto_8">Netto 8 dage</option><option value="netto_14">Netto 14 dage</option><option value="netto_30">Netto 30 dage</option><option value="immediate">Straksbetaling</option></select></label><label className="billing-check"><input type="checkbox" checked={Boolean(billing.requires_requisition)} onChange={(event) => setBilling({ ...billing, requires_requisition: event.target.checked })} /> Rekvisitionsnummer kræves</label><button className="primary-button" onClick={() => void saveBilling()}>Gem faktureringsopsætning</button></div></>}
           </aside>
         </div>
       )}

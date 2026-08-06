@@ -145,6 +145,13 @@ class OperationsApiTest extends TestCase
         $this->assertDatabaseHas('invoice_revisions', ['invoice_draft_id' => $invoiceId, 'field' => 'unit_price_ore']);
     }
 
+    public function test_business_customer_billing_profile_is_saved_without_external_integration(): void
+    {
+        $customerId = DB::table('customers')->insertGetId(['display_name' => 'Test Erhverv ApS', 'customer_type' => 'business', 'created_at' => now(), 'updated_at' => now()]);
+        $this->actingAs($this->user)->patchJson('/api/customers/'.$customerId.'/billing', ['cvrNumber' => '12345678', 'invoiceEmail' => 'faktura@test.dk', 'billingMethod' => 'email', 'paymentTerms' => 'netto_14', 'requiresRequisition' => true])->assertOk()->assertJsonPath('billing.cvr_number', '12345678');
+        $this->assertDatabaseHas('customer_billing_profiles', ['customer_id' => $customerId, 'billing_method' => 'email', 'requires_requisition' => true]);
+    }
+
     public function test_absence_removes_employee_from_booking_capacity(): void
     {
         $date = now()->next('Monday')->toDateString();
