@@ -95,6 +95,7 @@ services:
     environment:
       NODE_ENV: production
       LARAVEL_API_BASE_URL: http://api:8000
+      BOOKING_API_TOKEN: ${BOOKING_API_TOKEN}
     depends_on:
       api:
         condition: service_healthy
