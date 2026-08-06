@@ -40,6 +40,7 @@ Route::middleware(['web', 'api.token', 'throttle:120,1'])->group(function () {
     Route::post('/employees', [OperationsController::class, 'updateEmployee'])->middleware('permission:employees.write');
     Route::get('/invoices', [OperationsController::class, 'invoices']);
     Route::patch('/invoices', [OperationsController::class, 'updateInvoice'])->middleware('permission:invoices.write');
+    Route::post('/invoices/approve', [OperationsController::class, 'approveInvoices'])->middleware('permission:invoices.write');
     Route::get('/audit', [OperationsController::class, 'auditEvents']);
     Route::get('/imports', [OperationsController::class, 'imports']);
     Route::post('/imports/validate', [OperationsController::class, 'validateImport'])->middleware('permission:imports.write');

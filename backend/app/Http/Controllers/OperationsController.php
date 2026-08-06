@@ -369,16 +369,76 @@ class OperationsController extends Controller
 
     public function invoices(): JsonResponse
     {
-        return response()->json(['invoices' => DB::table('invoice_drafts')->orderBy('customer_name')->get()]);
+        $invoices = DB::table('invoice_drafts')->orderBy('customer_name')->get()->map(function ($invoice) {
+            $lines = DB::table('invoice_lines')->where('invoice_draft_id', $invoice->id)->orderBy('id')->get();
+            $checks = $this->invoiceChecks($invoice, $lines);
+
+            return array_merge((array) $invoice, ['lines' => $lines, 'checks' => $checks, 'blockingErrors' => collect($checks)->where('severity', 'error')->values()->all(), 'warnings' => collect($checks)->where('severity', 'warning')->values()->all()]);
+        });
+
+        return response()->json(['periods' => DB::table('invoice_periods')->orderByDesc('period_start')->get(), 'invoices' => $invoices]);
     }
 
     public function updateInvoice(Request $request): JsonResponse
     {
-        $data = $request->validate(['id' => ['required', 'integer', 'exists:invoice_drafts,id'], 'description' => ['required', 'string'], 'quantity' => ['required', 'integer', 'min:1'], 'unitPriceOre' => ['required', 'integer', 'min:0'], 'status' => ['required', 'in:Klargøres,Klar til Dinero']]);
-        DB::table('invoice_drafts')->where('id', $data['id'])->update(['description' => $data['description'], 'quantity' => $data['quantity'], 'unit_price_ore' => $data['unitPriceOre'], 'status' => $data['status'], 'updated_at' => now()]);
+        $data = $request->validate(['id' => ['required', 'integer', 'exists:invoice_drafts,id'], 'description' => ['required', 'string'], 'quantity' => ['required', 'numeric', 'min:0.01'], 'unitPriceOre' => ['required', 'integer', 'min:0'], 'status' => ['required', 'in:Klargøres,Klar til Dinero,requires_action,APPROVED'], 'reason' => ['nullable', 'string', 'max:500']]);
+        $current = DB::table('invoice_drafts')->where('id', $data['id'])->first();
+        abort_if($current?->locked_at, 409, 'Fakturaen er låst efter godkendelse');
+        $changes = ['description' => $data['description'], 'quantity' => $data['quantity'], 'unit_price_ore' => $data['unitPriceOre'], 'status' => $data['status'], 'updated_at' => now()];
+        $fields = ['description' => [$current->description, $data['description']], 'quantity' => [$current->quantity, $data['quantity']], 'unit_price_ore' => [$current->unit_price_ore, $data['unitPriceOre']]];
+        foreach ($fields as $field => [$old, $new]) {
+            if ((string) $old !== (string) $new) {
+                abort_if(blank($data['reason'] ?? null), 422, 'Angiv en begrundelse for manuelle ændringer');
+                DB::table('invoice_revisions')->insert(['invoice_draft_id' => $data['id'], 'field' => $field, 'original_value' => (string) $old, 'new_value' => (string) $new, 'reason' => $data['reason'], 'user_id' => Auth::id(), 'created_at' => now(), 'updated_at' => now()]);
+            }
+        }
+        DB::table('invoice_drafts')->where('id', $data['id'])->update($changes);
+        DB::table('invoice_lines')->where('invoice_draft_id', $data['id'])->where('source_system', 'legacy')->update(['description' => $data['description'], 'quantity' => $data['quantity'], 'unit_price_ore' => $data['unitPriceOre'], 'updated_at' => now()]);
         $this->audit('invoice.updated', 'invoice_draft', $data['id'], null, $data);
 
         return response()->json(['ok' => true]);
+    }
+
+    public function approveInvoices(Request $request): JsonResponse
+    {
+        $data = $request->validate(['ids' => ['required', 'array', 'min:1'], 'ids.*' => ['integer', 'exists:invoice_drafts,id']]);
+        $invoices = DB::table('invoice_drafts')->whereIn('id', $data['ids'])->get();
+        $blocked = $invoices->mapWithKeys(function ($invoice) {
+            $checks = $this->invoiceChecks($invoice, DB::table('invoice_lines')->where('invoice_draft_id', $invoice->id)->get());
+
+            return [$invoice->id => collect($checks)->where('severity', 'error')->pluck('message')->values()->all()];
+        })->filter(fn ($errors) => count($errors) > 0);
+        if ($blocked->isNotEmpty()) {
+            return response()->json(['error' => 'Nogle fakturaer har blokerende fejl', 'blocked' => $blocked], 422);
+        }
+        DB::table('invoice_drafts')->whereIn('id', $data['ids'])->update(['status' => 'APPROVED', 'external_status' => 'NOT_SENT', 'approved_by' => Auth::id(), 'approved_at' => now(), 'locked_at' => now(), 'updated_at' => now()]);
+        foreach ($data['ids'] as $id) {
+            $this->audit('invoice.approved', 'invoice_draft', $id, null, ['status' => 'APPROVED']);
+        }
+
+        return response()->json(['ok' => true, 'approved' => count($data['ids'])]);
+    }
+
+    private function invoiceChecks(object $invoice, $lines): array
+    {
+        $checks = [];
+        if ($invoice->billing_method === 'efaktura' && blank($invoice->customer_name)) {
+            $checks[] = ['code' => 'customer_missing', 'severity' => 'error', 'message' => 'Kunden mangler oplysninger til e-faktura'];
+        }
+        if ((int) $invoice->unit_price_ore === 0 || $lines->contains(fn ($line) => (int) $line->unit_price_ore === 0)) {
+            $checks[] = ['code' => 'zero_price', 'severity' => 'error', 'message' => 'En ydelse har en pris på 0 kr.'];
+        }
+        if ($lines->isEmpty()) {
+            $checks[] = ['code' => 'no_lines', 'severity' => 'error', 'message' => 'Fakturaen har ingen fakturalinjer'];
+        }
+        if (blank($invoice->payment_terms)) {
+            $checks[] = ['code' => 'payment_terms_missing', 'severity' => 'warning', 'message' => 'Betalingsbetingelser er ikke angivet'];
+        }
+        if ($invoice->external_status !== 'NOT_SENT') {
+            $checks[] = ['code' => 'external_state', 'severity' => 'info', 'message' => 'Dinero-status: '.$invoice->external_status];
+        }
+
+        return $checks;
     }
 
     public function auditEvents(): JsonResponse

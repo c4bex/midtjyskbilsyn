@@ -133,6 +133,18 @@ class OperationsApiTest extends TestCase
         $this->assertDatabaseHas('vehicles', ['registration_normalized' => 'BF12345']);
     }
 
+    public function test_invoice_control_requires_reason_for_edits_and_locks_after_approval(): void
+    {
+        $invoiceId = DB::table('invoice_drafts')->insertGetId(['customer_name' => 'Test Erhverv ApS', 'period' => 'August 2026', 'description' => 'Syn', 'quantity' => 1, 'unit_price_ore' => 40000, 'status' => 'Klargøres', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('invoice_lines')->insert(['invoice_draft_id' => $invoiceId, 'source_system' => 'test', 'source_key' => 'test:invoice:'.$invoiceId, 'description' => 'Syn · AB12345', 'quantity' => 1, 'unit' => 'stk.', 'unit_price_ore' => 40000, 'original_description' => 'Syn · AB12345', 'original_unit_price_ore' => 40000, 'created_at' => now(), 'updated_at' => now()]);
+
+        $this->actingAs($this->user)->patchJson('/api/invoices', ['id' => $invoiceId, 'description' => 'Rettet syn', 'quantity' => 1, 'unitPriceOre' => 42000, 'status' => 'Klargøres'])->assertStatus(422);
+        $this->actingAs($this->user)->patchJson('/api/invoices', ['id' => $invoiceId, 'description' => 'Rettet syn', 'quantity' => 1, 'unitPriceOre' => 42000, 'status' => 'Klargøres', 'reason' => 'Aftalt ny kundepris'])->assertOk();
+        $this->actingAs($this->user)->postJson('/api/invoices/approve', ['ids' => [$invoiceId]])->assertOk();
+        $this->assertDatabaseHas('invoice_drafts', ['id' => $invoiceId, 'status' => 'APPROVED']);
+        $this->assertDatabaseHas('invoice_revisions', ['invoice_draft_id' => $invoiceId, 'field' => 'unit_price_ore']);
+    }
+
     public function test_absence_removes_employee_from_booking_capacity(): void
     {
         $date = now()->next('Monday')->toDateString();
