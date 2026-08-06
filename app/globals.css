@@ -598,3 +598,16 @@ main { grid-column: 2; min-width: 0; }
 .cycle-control select { min-width: 105px; height: 28px; padding: 0 6px; border: 1px solid #d8e1e8; border-radius: 6px; color: #526474; background: #fff; font-size: 8px; }
 .schedule-help { margin: 14px 0 0; color: #89939c; font-size: 8px; }
 .live-design .schedule-row { grid-template-columns: 1fr minmax(220px, 1fr) 110px 112px 112px; }
+/* Hurtig søgning og kopiering på bookingoversigten */
+.global-search { position: relative; display: flex; align-items: center; width: min(360px, 32vw); min-width: 210px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.global-search input { width: 100%; height: 34px; border: 0; outline: 0; color: var(--ink); background: transparent; font-size: 11px; }
+.global-search-results { position: absolute; top: calc(100% + 7px); left: 0; right: 0; z-index: 20; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: #fff; box-shadow: 0 14px 30px rgba(20, 35, 50, .16); }
+.global-search-results button { display: grid; width: 100%; gap: 3px; padding: 10px 12px; border: 0; border-bottom: 1px solid #edf0f1; color: var(--ink); background: #fff; text-align: left; cursor: pointer; }
+.global-search-results button:hover { background: #f4f8f7; }
+.global-search-results strong { font-size: 11px; }
+.global-search-results small, .search-empty { color: #86929b; font-size: 9px; }
+.search-empty { display: block; padding: 12px; }
+.large-plate { color: var(--ink); font-size: 16px; letter-spacing: .04em; }
+.copy-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.copy-chip { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border: 1px solid #d9e4e0; border-radius: 4px; color: #127d63; background: #f0faf6; font-size: 8px; font-weight: 700; cursor: copy; }
+.copy-chip:hover { color: #0d624f; background: #e0f5ed; }

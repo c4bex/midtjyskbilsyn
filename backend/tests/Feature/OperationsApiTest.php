@@ -47,6 +47,18 @@ class OperationsApiTest extends TestCase
         $this->assertDatabaseHas('sms_messages', ['booking_id' => $bookingId, 'kind' => 'reminder', 'status' => 'held']);
     }
 
+    public function test_global_search_finds_booking_by_plate_and_requisition_number(): void
+    {
+        $date = now()->addDays(4)->toDateString();
+        $bookingId = $this->actingAs($this->user)->postJson('/api/bookings', [
+            'customer' => 'Søgekunde ApS', 'customerType' => 'business', 'plate' => 'EN48111', 'vehicle' => 'Ford Transit',
+            'requisitionNumber' => 'REKV-2026-42', 'date' => $date, 'time' => '08:00', 'inspection' => 'Periodisk syn',
+        ])->assertCreated()->json('booking.id');
+
+        $this->actingAs($this->user)->getJson('/api/search?q=EN48111')->assertOk()->assertJsonPath('results.0.type', 'booking')->assertJsonPath('results.0.booking.id', (string) $bookingId);
+        $this->actingAs($this->user)->getJson('/api/search?q=REKV-2026-42')->assertOk()->assertJsonPath('results.0.booking.requisitionNumber', 'REKV-2026-42');
+    }
+
     public function test_calendar_returns_available_slots_from_mysql_rules(): void
     {
         $monday = now()->next('Monday')->toDateString();

@@ -32,6 +32,7 @@ Route::middleware(['web', 'api.token', 'throttle:120,1'])->group(function () {
     Route::patch('/bookings/{booking}', [OperationsController::class, 'updateBooking'])->middleware('permission:bookings.write');
     Route::delete('/bookings/{booking}', [OperationsController::class, 'deleteBooking'])->middleware('permission:bookings.write');
     Route::get('/customers', [OperationsController::class, 'customers']);
+    Route::get('/search', [OperationsController::class, 'search']);
     Route::patch('/customers/{customer}/billing', [OperationsController::class, 'updateCustomerBilling'])->middleware('permission:customers.write');
     Route::get('/vehicles/lookup', [OperationsController::class, 'vehicleLookup']);
     Route::get('/calendar/week', [OperationsController::class, 'calendarWeek']);

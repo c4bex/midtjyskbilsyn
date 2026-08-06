@@ -32,11 +32,11 @@ class OperationsController extends Controller
         }
         $rows = DB::table('bookings')->leftJoin('customers', 'customers.id', '=', 'bookings.customer_id')->join('vehicles', 'vehicles.id', '=', 'bookings.vehicle_id')
             ->whereDate('bookings.starts_at', $date)->where('bookings.status', '!=', 'cancelled')->orderBy('bookings.starts_at')
-            ->get(['bookings.id', 'bookings.starts_at', 'bookings.slot_count', 'bookings.inspection_type', 'bookings.status', 'customers.display_name', 'customers.customer_type', 'customers.phone', 'vehicles.registration_normalized', 'vehicles.make', 'vehicles.model']);
+            ->get(['bookings.id', 'bookings.starts_at', 'bookings.slot_count', 'bookings.inspection_type', 'bookings.status', 'bookings.requisition_number', 'customers.display_name', 'customers.customer_type', 'customers.phone', 'vehicles.registration_normalized', 'vehicles.make', 'vehicles.model']);
         $bookings = $rows->map(fn ($row) => [
             'id' => (string) $row->id, 'date' => $date, 'time' => CarbonImmutable::parse($row->starts_at)->format('H:i'), 'slotCount' => (int) ($row->slot_count ?? 1),
             'customer' => $row->display_name ?? 'Ukendt kunde', 'customerType' => $row->customer_type ?? 'private',
-            'plate' => $this->formatPlate($row->registration_normalized), 'phone' => $row->phone, 'vehicle' => trim(($row->make ?? '').' '.($row->model ?? '')),
+            'plate' => $this->formatPlate($row->registration_normalized), 'phone' => $row->phone, 'requisitionNumber' => $row->requisition_number, 'vehicle' => trim(($row->make ?? '').' '.($row->model ?? '')),
             'inspection' => $row->inspection_type, 'status' => $row->status,
         ]);
         $availability = $this->availabilityForDate($date, $request->string('inspection')->toString() ?: null);
@@ -79,7 +79,7 @@ class OperationsController extends Controller
                 $customerId = DB::table('customers')->insertGetId(['display_name' => $input['customer'], 'customer_type' => $input['customerType'], 'phone' => $input['phone'] ?? null, 'created_at' => now(), 'updated_at' => now()]);
                 $vehicleId = DB::table('vehicles')->insertGetId(['customer_id' => $customerId, 'registration_normalized' => $registration, 'make' => $make, 'model' => $model, 'created_at' => now(), 'updated_at' => now()]);
             }
-            $id = DB::table('bookings')->insertGetId(['customer_id' => $customerId, 'vehicle_id' => $vehicleId, 'starts_at' => $startsAt, 'ends_at' => $startsAt->addMinutes($definition['requiredSlots'] * $availability['intervalMinutes']), 'slot_count' => $definition['requiredSlots'], 'inspection_type' => $input['inspection'], 'status' => $input['status'] ?? 'confirmed', 'source' => 'manual', 'created_at' => now(), 'updated_at' => now()]);
+            $id = DB::table('bookings')->insertGetId(['customer_id' => $customerId, 'vehicle_id' => $vehicleId, 'starts_at' => $startsAt, 'ends_at' => $startsAt->addMinutes($definition['requiredSlots'] * $availability['intervalMinutes']), 'slot_count' => $definition['requiredSlots'], 'inspection_type' => $input['inspection'], 'requisition_number' => $input['requisitionNumber'] ?? null, 'status' => $input['status'] ?? 'confirmed', 'source' => 'manual', 'created_at' => now(), 'updated_at' => now()]);
             $this->audit('booking.created', 'booking', $id, null, $input);
             if ($input['customerType'] === 'private') {
                 $this->queueSms($id, 'confirmation', $customerId, $input['phone'] ?? null, $startsAt, $registration);
@@ -120,7 +120,7 @@ class OperationsController extends Controller
             }
             DB::table('customers')->where('id', $current->customer_id)->update(['display_name' => $input['customer'], 'customer_type' => $input['customerType'], 'phone' => $input['phone'] ?? null, 'updated_at' => now()]);
             DB::table('vehicles')->where('id', $current->vehicle_id)->update(['registration_normalized' => $this->normalizePlate($input['plate']), 'make' => $make, 'model' => $model, 'updated_at' => now()]);
-            DB::table('bookings')->where('id', $booking)->update(['starts_at' => $startsAt, 'ends_at' => $startsAt->addMinutes($definition['requiredSlots'] * $availability['intervalMinutes']), 'slot_count' => $definition['requiredSlots'], 'inspection_type' => $input['inspection'], 'updated_at' => now()]);
+            DB::table('bookings')->where('id', $booking)->update(['starts_at' => $startsAt, 'ends_at' => $startsAt->addMinutes($definition['requiredSlots'] * $availability['intervalMinutes']), 'slot_count' => $definition['requiredSlots'], 'inspection_type' => $input['inspection'], 'requisition_number' => $input['requisitionNumber'] ?? $current->requisition_number, 'updated_at' => now()]);
             $changed = CarbonImmutable::parse($current->starts_at)->format('Y-m-d H:i') !== $startsAt->format('Y-m-d H:i') || $current->inspection_type !== $input['inspection'] || $current->registration_normalized !== $this->normalizePlate($input['plate']);
             if ($changed && $input['customerType'] === 'private') {
                 DB::table('sms_messages')->where('booking_id', $booking)->whereIn('kind', ['reminder', 'changed'])->whereIn('status', ['held', 'DRAFT', 'SCHEDULED', 'QUEUED'])->update(['status' => 'CANCELLED', 'cancelled_at' => now(), 'updated_at' => now()]);
@@ -165,6 +165,24 @@ class OperationsController extends Controller
         });
 
         return response()->json(['customers' => $customers]);
+    }
+
+    public function search(Request $request): JsonResponse
+    {
+        $term = trim($request->string('q')->toString());
+        if (mb_strlen($term) < 2) {
+            return response()->json(['results' => []]);
+        }
+        $like = '%'.$term.'%';
+        $plate = $this->normalizePlate($term);
+        $results = collect();
+        $results = $results->merge(DB::table('bookings')->join('customers', 'customers.id', '=', 'bookings.customer_id')->join('vehicles', 'vehicles.id', '=', 'bookings.vehicle_id')->where(function ($query) use ($like, $plate) {
+            $query->where('customers.display_name', 'like', $like)->orWhere('vehicles.registration_normalized', 'like', '%'.$plate.'%')->orWhere('bookings.requisition_number', 'like', $like);
+        })->orderByDesc('bookings.starts_at')->limit(12)->get()->map(fn ($row) => ['type' => 'booking', 'id' => (string) $row->id, 'title' => $this->formatPlate($row->registration_normalized).' · '.$row->display_name, 'subtitle' => CarbonImmutable::parse($row->starts_at)->format('d.m.Y H:i').' · '.$row->inspection_type, 'booking' => ['id' => (string) $row->id, 'date' => CarbonImmutable::parse($row->starts_at)->format('Y-m-d'), 'time' => CarbonImmutable::parse($row->starts_at)->format('H:i'), 'customer' => $row->display_name, 'customerType' => $row->customer_type, 'plate' => $this->formatPlate($row->registration_normalized), 'vehicle' => trim(($row->make ?? '').' '.($row->model ?? '')), 'inspection' => $row->inspection_type, 'status' => $row->status, 'phone' => $row->phone, 'requisitionNumber' => $row->requisition_number]]));
+        $results = $results->merge(DB::table('customers')->where('display_name', 'like', $like)->orderBy('display_name')->limit(8)->get()->map(fn ($row) => ['type' => 'customer', 'id' => (string) $row->id, 'title' => $row->display_name, 'subtitle' => $row->customer_type === 'business' ? 'Erhvervskunde' : 'Privatkunde']));
+        $results = $results->merge(DB::table('vehicles')->where('registration_normalized', 'like', '%'.$plate.'%')->limit(8)->get()->map(fn ($row) => ['type' => 'vehicle', 'id' => (string) $row->id, 'title' => $this->formatPlate($row->registration_normalized), 'subtitle' => trim(($row->make ?? '').' '.($row->model ?? ''))]));
+
+        return response()->json(['results' => $results->unique(fn ($item) => $item['type'].':'.$item['id'])->take(20)->values()]);
     }
 
     public function updateCustomerBilling(Request $request, int $customer): JsonResponse
@@ -614,7 +632,7 @@ class OperationsController extends Controller
 
     private function bookingInput(Request $request): array|JsonResponse
     {
-        $validator = Validator::make($request->all(), ['customer' => ['required', 'string', 'max:160'], 'customerType' => ['required', 'in:private,business'], 'phone' => ['nullable', 'string', 'max:32'], 'plate' => ['required', 'string', 'max:12'], 'vehicle' => ['nullable', 'string', 'max:200'], 'date' => ['required', 'date_format:Y-m-d'], 'time' => ['required', 'date_format:H:i'], 'inspection' => ['required', 'string', 'max:80'], 'status' => ['nullable', 'string', 'max:32']]);
+        $validator = Validator::make($request->all(), ['customer' => ['required', 'string', 'max:160'], 'customerType' => ['required', 'in:private,business'], 'phone' => ['nullable', 'string', 'max:32'], 'plate' => ['required', 'string', 'max:12'], 'vehicle' => ['nullable', 'string', 'max:200'], 'requisitionNumber' => ['nullable', 'string', 'max:100'], 'date' => ['required', 'date_format:Y-m-d'], 'time' => ['required', 'date_format:H:i'], 'inspection' => ['required', 'string', 'max:80'], 'status' => ['nullable', 'string', 'max:32']]);
 
         return $validator->fails() ? response()->json(['error' => 'Kunde, dato, tid og registreringsnummer skal udfyldes', 'errors' => $validator->errors()], 422) : $validator->validated();
     }

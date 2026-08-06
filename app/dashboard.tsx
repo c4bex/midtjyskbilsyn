@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  Copy,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -42,6 +43,7 @@ type Booking = {
   customer: string;
   customerType: CustomerType;
   phone?: string | null;
+  requisitionNumber?: string | null;
   plate: string;
   vehicle: string;
   inspection: string;
@@ -53,6 +55,7 @@ type VehicleLookup = { found: boolean; source: string; vehicle?: { registration:
 type WeekDay = { date: string; weekday: number; closed: boolean; totalSlots: number; bookedSlots: number; availableCapacity?: number; availableSlots: string[]; staffedInspectors?: number };
 type SmsTemplate = "booking_confirmation" | "booking_reminder" | "booking_changed" | "booking_cancelled";
 type InspectionType = { id: number; name: string; required_slots: number; is_active: boolean };
+type SearchResult = { type: "booking" | "customer" | "vehicle"; id: string; title: string; subtitle: string; booking?: Booking };
 
 const nav = [
   { id: "bookings", label: "Bookinger", icon: CalendarDays },
@@ -145,6 +148,9 @@ export function Dashboard() {
   ]);
   const [weekLoading, setWeekLoading] = useState(true);
   const [inspectionTypes, setInspectionTypes] = useState<InspectionType[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const visibleBookings = filter === "alle" ? bookings : bookings.filter((booking) => booking.customerType === filter);
   const privateCount = bookings.filter((booking) => booking.customerType === "private").length;
@@ -162,6 +168,28 @@ export function Dashboard() {
     setNotice(message);
     window.setTimeout(() => setNotice(""), 2600);
   }, []);
+
+  const copyValue = async (value: string, label: string) => {
+    try { await navigator.clipboard.writeText(value); flash(`${label} kopieret`); } catch { flash("Kunne ikke kopiere til udklipsholderen"); }
+  };
+
+  useEffect(() => {
+    if (searchQuery.trim().length < 2) {
+      // Search results are derived from the external API and must be cleared when the query is shortened.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSearchResults([]); return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => fetch(`/api/search?q=${encodeURIComponent(searchQuery.trim())}`, { signal: controller.signal, cache: "no-store" }).then((response) => response.ok ? response.json() as Promise<{ results: SearchResult[] }> : Promise.reject()).then((data) => { setSearchResults(data.results); setSearchOpen(true); }).catch(() => undefined), 180);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [searchQuery]);
+
+  const selectSearchResult = (result: SearchResult) => {
+    setSearchOpen(false); setSearchQuery("");
+    if (result.type === "booking" && result.booking) { setSelectedDate(result.booking.date); openEdit(result.booking); return; }
+    if (result.type === "customer") navigate("customers");
+    if (result.type === "vehicle") navigate("customers");
+  };
 
   const navigate = (view: string) => {
     setActiveView(view as "bookings" | "customers" | "availability" | "sms" | "invoices" | "employees" | "drift");
@@ -394,6 +422,7 @@ export function Dashboard() {
           })}
         </nav>
         <div className="live-actions">
+          <div className="global-search"><Search size={16} /><input value={searchQuery} onFocus={() => searchQuery.length >= 2 && setSearchOpen(true)} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Søg kunde, booking eller reg.nr." aria-label="Søg i systemet" />{searchOpen && <div className="global-search-results">{searchResults.length === 0 ? <span className="search-empty">Ingen resultater</span> : searchResults.map((result) => <button key={`${result.type}-${result.id}`} onClick={() => selectSearchResult(result)}><strong>{result.title}</strong><small>{result.subtitle}{result.type === "booking" ? " · Klik for at redigere" : ""}</small></button>)}</div>}</div>
           <span className="live-location">Ikast</span>
           <button className="ai-launch-button" aria-label="Åbn fagassistent" onClick={() => setAssistantOpen(true)}><Sparkles size={16} /><span>Fagassistent</span></button>
           <button className="icon-button notification" aria-label="Notifikationer" onClick={() => flash("Du har 2 nye driftsbeskeder")}><Bell size={18} /><i /></button>
@@ -441,7 +470,7 @@ export function Dashboard() {
                   <div className="month-picker-days">
                     {monthGrid(calendarMonth).map((date, index) => <div className="month-picker-cell" key={date}>{index % 7 === 0 && <span className="month-week-number">{isoWeek(date)}</span>}<button className={`${date.slice(0, 7) !== calendarMonth ? "outside" : ""} ${date === selectedDate ? "selected" : ""}`} onClick={() => selectCalendarDate(date)} aria-label={formatDanishDate(date)}>{dayNumber(date)}</button></div>)}
                   </div>
-                  <button className="month-picker-today" onClick={() => selectCalendarDate("2026-08-04")}>Gå til i dag</button>
+                  <button className="month-picker-today" onClick={() => selectCalendarDate(currentDate)}>Gå til i dag</button>
                 </div>}
               </div>
               <div className="week-navigation"><button aria-label="Forrige uge" onClick={() => changeWeek(-7)}><ChevronLeft size={18} /></button><button onClick={goToCurrentWeek}>Denne uge</button><button aria-label="Næste uge" onClick={() => changeWeek(7)}><ChevronRight size={18} /></button></div>
@@ -450,7 +479,7 @@ export function Dashboard() {
               {weekDays.map((day) => {
                 const available = day.availableCapacity ?? day.availableSlots.length;
                 const fullness = day.totalSlots ? Math.round(day.bookedSlots / day.totalSlots * 100) : 0;
-                const today = day.date === "2026-08-04";
+                const today = day.date === currentDate;
                 return <button key={day.date} disabled={weekLoading || day.closed} className={`${day.closed ? "closed" : available > 0 ? "available" : "full"} ${today ? "today" : ""} ${selectedDate === day.date ? "selected-day" : ""}`} onClick={() => selectDay(day)} aria-pressed={selectedDate === day.date}>
                   <span className="capacity-day-name">{dayNames[day.weekday - 1]}{today && <em>I dag</em>}</span>
                   <strong>{dayNumber(day.date)}</strong><small>{monthName(day.date)}</small>
@@ -483,7 +512,7 @@ export function Dashboard() {
                         <i className={booking.customerType}>{booking.customerType === "business" ? <Building2 size={14} /> : <UserRound size={14} />}</i>
                         <span><strong>{booking.customer}</strong><small>{booking.customerType === "business" ? "Erhverv" : "Privat"}</small></span>
                       </span>
-                      <span className="row-vehicle" role="cell"><strong>{booking.plate}</strong><small>{booking.vehicle}</small></span>
+                      <span className="row-vehicle" role="cell"><strong className="large-plate">{booking.plate}</strong><span className="copy-actions"><span className="copy-chip" role="button" tabIndex={0} title="Kopiér nummerplade" onClick={(event) => { event.stopPropagation(); void copyValue(booking.plate.replaceAll(" ", ""), "Nummerplade"); }} onKeyDown={(event) => { if (event.key === "Enter") { event.stopPropagation(); void copyValue(booking.plate.replaceAll(" ", ""), "Nummerplade"); } }}><Copy size={12} /> Kopiér</span>{booking.requisitionNumber && <span className="copy-chip" role="button" tabIndex={0} title="Kopiér rekvisitionsnummer" onClick={(event) => { event.stopPropagation(); void copyValue(booking.requisitionNumber ?? "", "Rekvisitionsnummer"); }}><Copy size={12} /> Rekv.</span>}</span><small>{booking.vehicle}</small></span>
                       <span className="row-inspection" role="cell">{booking.inspection}</span>
                       <span role="cell"><em className={`status ${booking.status}`}>{booking.status === "completed" && <Check size={12} />}{statusText[booking.status]}</em></span>
                       <span className="row-action" role="cell"><MoreHorizontal size={18} /></span>
@@ -496,7 +525,7 @@ export function Dashboard() {
 
             <aside className="day-aside">
               <section className="available-card">
-                <div className="aside-title"><span className="aside-icon"><Clock3 size={18} /></span><div><h2>Ledige tider</h2><p>{selectedDate === "2026-08-04" ? "I dag" : `${dayNumber(selectedDate)}. ${monthName(selectedDate)}`}</p></div></div>
+                <div className="aside-title"><span className="aside-icon"><Clock3 size={18} /></span><div><h2>Ledige tider</h2><p>{selectedDate === currentDate ? "I dag" : `${dayNumber(selectedDate)}. ${monthName(selectedDate)}`}</p></div></div>
                 <div className="available-times">
                   {availableSlots.map((time) => <button key={time} onClick={() => openCreate(time)}>{time} <Plus size={15} /></button>)}
                   {availableSlots.length === 0 && <p className="no-slots">Ingen ledige tider</p>}
