@@ -50,7 +50,10 @@ Route::middleware(['web', 'api.token', 'throttle:120,1'])->group(function () {
     Route::patch('/sms/settings', [OperationsController::class, 'updateSmsSettings'])->middleware('permission:settings.write');
     Route::get('/sms/templates', [OperationsController::class, 'smsTemplates']);
     Route::patch('/sms/templates/{code}', [OperationsController::class, 'updateSmsTemplate'])->middleware('permission:settings.write');
+    Route::post('/sms/templates/{code}/reset', [OperationsController::class, 'resetSmsTemplate'])->middleware('permission:settings.write');
     Route::get('/sms/messages', [OperationsController::class, 'smsMessages']);
+    Route::get('/customers/{customer}/sms-preferences', [OperationsController::class, 'businessSmsPreferences']);
+    Route::patch('/customers/{customer}/sms-preferences', [OperationsController::class, 'updateBusinessSmsPreferences'])->middleware('permission:customers.write');
     Route::get('/ai/bootstrap', [AiAssistantController::class, 'bootstrap'])->middleware('permission:ai.use');
     Route::post('/ai/conversations', [AiAssistantController::class, 'createConversation'])->middleware('permission:ai.use');
     Route::get('/ai/conversations/{conversation}', [AiAssistantController::class, 'showConversation'])->middleware('permission:ai.use');

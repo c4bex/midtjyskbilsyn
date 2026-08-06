@@ -94,12 +94,13 @@ class OperationsController extends Controller
 
     public function updateBooking(Request $request, int $booking): JsonResponse
     {
-        $current = DB::table('bookings')->join('vehicles', 'vehicles.id', '=', 'bookings.vehicle_id')->leftJoin('customers', 'customers.id', '=', 'bookings.customer_id')->where('bookings.id', $booking)->first(['bookings.*', 'vehicles.registration_normalized', 'vehicles.make', 'vehicles.model', 'customers.display_name', 'customers.customer_type']);
+        $current = DB::table('bookings')->join('vehicles', 'vehicles.id', '=', 'bookings.vehicle_id')->leftJoin('customers', 'customers.id', '=', 'bookings.customer_id')->where('bookings.id', $booking)->first(['bookings.*', 'vehicles.registration_normalized', 'vehicles.make', 'vehicles.model', 'customers.display_name', 'customers.customer_type', 'customers.phone']);
         if (! $current) {
             return response()->json(['error' => 'Bookingen findes ikke'], 404);
         }
         if ($request->input('action') === 'cancel') {
             DB::table('bookings')->where('id', $booking)->update(['status' => 'cancelled', 'updated_at' => now()]);
+            DB::table('sms_messages')->where('booking_id', $booking)->whereIn('status', ['held', 'DRAFT', 'SCHEDULED', 'QUEUED'])->update(['status' => 'CANCELLED', 'cancelled_at' => now(), 'updated_at' => now()]);
             $this->audit('booking.cancelled', 'booking', $booking, (array) $current, ['status' => 'cancelled']);
 
             return response()->json(['ok' => true]);
@@ -120,6 +121,14 @@ class OperationsController extends Controller
             DB::table('customers')->where('id', $current->customer_id)->update(['display_name' => $input['customer'], 'customer_type' => $input['customerType'], 'phone' => $input['phone'] ?? null, 'updated_at' => now()]);
             DB::table('vehicles')->where('id', $current->vehicle_id)->update(['registration_normalized' => $this->normalizePlate($input['plate']), 'make' => $make, 'model' => $model, 'updated_at' => now()]);
             DB::table('bookings')->where('id', $booking)->update(['starts_at' => $startsAt, 'ends_at' => $startsAt->addMinutes($definition['requiredSlots'] * $availability['intervalMinutes']), 'slot_count' => $definition['requiredSlots'], 'inspection_type' => $input['inspection'], 'updated_at' => now()]);
+            $changed = CarbonImmutable::parse($current->starts_at)->format('Y-m-d H:i') !== $startsAt->format('Y-m-d H:i') || $current->inspection_type !== $input['inspection'] || $current->registration_normalized !== $this->normalizePlate($input['plate']);
+            if ($changed && $input['customerType'] === 'private') {
+                DB::table('sms_messages')->where('booking_id', $booking)->whereIn('kind', ['reminder', 'changed'])->whereIn('status', ['held', 'DRAFT', 'SCHEDULED', 'QUEUED'])->update(['status' => 'CANCELLED', 'cancelled_at' => now(), 'updated_at' => now()]);
+                $this->queueSms($booking, 'changed', (int) $current->customer_id, $input['phone'] ?? $current->phone, $startsAt, $this->normalizePlate($input['plate']));
+                if ($startsAt->isAfter(now()->addDay())) {
+                    $this->queueSms($booking, 'reminder', (int) $current->customer_id, $input['phone'] ?? $current->phone, $startsAt, $this->normalizePlate($input['plate']));
+                }
+            }
             $this->audit('booking.updated', 'booking', $booking, (array) $current, $input);
 
             return null;
@@ -534,6 +543,12 @@ class OperationsController extends Controller
     public function updateSmsTemplate(Request $request, string $code): JsonResponse
     {
         $data = $request->validate(['body' => ['required', 'string', 'max:1600'], 'enabled' => ['required', 'boolean']]);
+        $allowed = ['customer_name', 'customerName', 'company_name', 'registration_number', 'registration', 'inspection_type', 'booking_date', 'date', 'booking_time', 'time', 'location_name', 'location_address', 'company_phone', 'booking_reference', 'booking_link'];
+        preg_match_all('/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/', $data['body'], $matches);
+        $unknown = array_values(array_diff(array_unique($matches[1] ?? []), $allowed));
+        if ($unknown) {
+            return response()->json(['error' => 'Ukendt skabelonfelt: '.implode(', ', $unknown)], 422);
+        }
         $template = DB::table('sms_templates')->where('code', $code)->first();
         if (! $template) {
             return response()->json(['error' => 'SMS-skabelonen findes ikke'], 404);
@@ -541,6 +556,38 @@ class OperationsController extends Controller
         DB::table('sms_templates')->where('id', $template->id)->update(['body' => $data['body'], 'enabled' => $data['enabled'], 'version' => ((int) $template->version) + 1, 'updated_at' => now()]);
 
         return response()->json(['template' => DB::table('sms_templates')->where('id', $template->id)->first()]);
+    }
+
+    public function resetSmsTemplate(string $code): JsonResponse
+    {
+        $defaults = ['PRIVATE_BOOKING_CONFIRMATION' => 'Hej {{customerName}}. Din tid hos Midtjysk Bilsyn er {{date}} kl. {{time}}. Svar gerne på denne SMS ved spørgsmål.', 'PRIVATE_BOOKING_REMINDER' => 'Påmindelse: Du har tid hos Midtjysk Bilsyn {{date}} kl. {{time}} for {{registration}}. Vi glæder os til at se dig.', 'PRIVATE_BOOKING_CHANGED' => 'Din tid hos Midtjysk Bilsyn er ændret til {{date}} kl. {{time}}. Svar gerne på denne SMS ved spørgsmål.', 'BUSINESS_BOOKING_CONFIRMATION' => 'Booking hos Midtjysk Bilsyn: {{date}} kl. {{time}} · {{registration}}.', 'BUSINESS_BOOKING_REMINDER' => 'Påmindelse om booking hos Midtjysk Bilsyn {{date}} kl. {{time}} · {{registration}}.', 'BUSINESS_BOOKING_CHANGED' => 'Booking ændret hos Midtjysk Bilsyn til {{date}} kl. {{time}} · {{registration}}.'];
+        if (! isset($defaults[$code]) || ! DB::table('sms_templates')->where('code', $code)->exists()) {
+            return response()->json(['error' => 'SMS-skabelonen findes ikke'], 404);
+        }
+        DB::table('sms_templates')->where('code', $code)->update(['body' => $defaults[$code], 'enabled' => true, 'version' => DB::raw('version + 1'), 'updated_at' => now()]);
+
+        return response()->json(['template' => DB::table('sms_templates')->where('code', $code)->first()]);
+    }
+
+    public function businessSmsPreferences(int $customer): JsonResponse
+    {
+        abort_unless(DB::table('customers')->where('id', $customer)->where('customer_type', 'business')->exists(), 404, 'Erhvervskunden findes ikke');
+        $preferences = DB::table('business_sms_preferences')->where('customer_id', $customer)->first();
+        if (! $preferences) {
+            DB::table('business_sms_preferences')->insert(['customer_id' => $customer, 'created_at' => now(), 'updated_at' => now()]);
+            $preferences = DB::table('business_sms_preferences')->where('customer_id', $customer)->first();
+        }
+
+        return response()->json(['preferences' => $preferences]);
+    }
+
+    public function updateBusinessSmsPreferences(Request $request, int $customer): JsonResponse
+    {
+        abort_unless(DB::table('customers')->where('id', $customer)->where('customer_type', 'business')->exists(), 404, 'Erhvervskunden findes ikke');
+        $data = $request->validate(['confirmationEnabled' => ['required', 'boolean'], 'reminderEnabled' => ['required', 'boolean'], 'changeEnabled' => ['required', 'boolean']]);
+        DB::table('business_sms_preferences')->updateOrInsert(['customer_id' => $customer], ['confirmation_enabled' => $data['confirmationEnabled'], 'reminder_enabled' => $data['reminderEnabled'], 'change_enabled' => $data['changeEnabled'], 'created_at' => now(), 'updated_at' => now()]);
+
+        return response()->json(['preferences' => DB::table('business_sms_preferences')->where('customer_id', $customer)->first()]);
     }
 
     public function smsMessages(Request $request): JsonResponse
