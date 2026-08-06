@@ -590,3 +590,8 @@ main { grid-column: 2; min-width: 0; }
 
 @media (max-width: 900px) { .ai-launch-button span { display: none; }.ai-floating-button { display: none; } }
 @media (max-width: 620px) { .ai-assistant,.ai-assistant.fullscreen { inset: 0; width: 100%; border: 0; border-radius: 0; }.ai-assistant-head nav button:first-child { display: none; }.ai-upload-form,.ai-document-edit { grid-template-columns: 1fr; }.ai-upload-form input[type="file"] { grid-column: auto; }.document-summary { grid-template-columns: auto 1fr auto; }.document-summary .approval-status { grid-column: 1; grid-row: 2; } }
+
+.schedule-row .cycle-control { display: grid; gap: 3px; align-items: start; font-size: 7px; font-weight: 700; }
+.cycle-control select { min-width: 105px; height: 28px; padding: 0 6px; border: 1px solid #d8e1e8; border-radius: 6px; color: #526474; background: #fff; font-size: 8px; }
+.schedule-help { margin: 14px 0 0; color: #89939c; font-size: 8px; }
+.live-design .schedule-row { grid-template-columns: 1fr minmax(220px, 1fr) 110px 112px 112px; }

@@ -84,6 +84,18 @@ class OperationsApiTest extends TestCase
         $this->assertNotContains('09:20', $final->json('days.0.availableSlots'));
     }
 
+    public function test_employee_rotation_changes_capacity_without_daily_configuration(): void
+    {
+        $date = '2026-08-03'; // ISO-uge 32, uge 2 i et to-ugers rul.
+        $employeeId = DB::table('employees')->where('booking_capacity', true)->value('id');
+        DB::table('employee_work_rules')->where('employee_id', $employeeId)->where('weekday', 1)->update(['cycle_weeks' => 2, 'cycle_week' => 1]);
+
+        $this->actingAs($this->user)->getJson('/api/calendar/week?start='.$date)->assertOk()->assertJsonPath('days.0.staffedInspectors', 0);
+
+        DB::table('employee_work_rules')->where('employee_id', $employeeId)->where('weekday', 1)->update(['cycle_week' => 2]);
+        $this->actingAs($this->user)->getJson('/api/calendar/week?start='.$date)->assertOk()->assertJsonPath('days.0.staffedInspectors', 1);
+    }
+
     public function test_toldsyn_reserves_two_adjacent_booking_slots_as_one_booking(): void
     {
         $date = now()->next('Monday')->toDateString();

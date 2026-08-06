@@ -245,8 +245,11 @@ class OperationsController extends Controller
             return response()->json(['ok' => true]);
         }
         if ($type === 'work_rule') {
-            $data = $request->validate(['employeeId' => ['required', 'integer', 'exists:employees,id'], 'weekday' => ['required', 'integer', 'between:1,7'], 'startsAt' => ['nullable', 'date_format:H:i'], 'endsAt' => ['nullable', 'date_format:H:i'], 'working' => ['required', 'boolean']]);
-            DB::table('employee_work_rules')->updateOrInsert(['employee_id' => $data['employeeId'], 'weekday' => $data['weekday']], ['starts_at' => $data['startsAt'] ?? null, 'ends_at' => $data['endsAt'] ?? null, 'working' => $data['working'], 'created_at' => now(), 'updated_at' => now()]);
+            $data = $request->validate(['employeeId' => ['required', 'integer', 'exists:employees,id'], 'weekday' => ['required', 'integer', 'between:1,7'], 'startsAt' => ['nullable', 'date_format:H:i'], 'endsAt' => ['nullable', 'date_format:H:i'], 'working' => ['required', 'boolean'], 'cycleWeeks' => ['nullable', 'integer', 'between:1,6'], 'cycleWeek' => ['nullable', 'integer', 'between:1,6']]);
+            $cycleWeeks = (int) ($data['cycleWeeks'] ?? 1);
+            $cycleWeek = (int) ($data['cycleWeek'] ?? 1);
+            abort_if($cycleWeek > $cycleWeeks, 422, 'Uge i rul skal være inden for rullets længde');
+            DB::table('employee_work_rules')->updateOrInsert(['employee_id' => $data['employeeId'], 'weekday' => $data['weekday']], ['starts_at' => $data['startsAt'] ?? null, 'ends_at' => $data['endsAt'] ?? null, 'working' => $data['working'], 'cycle_weeks' => $cycleWeeks, 'cycle_week' => $cycleWeek, 'created_at' => now(), 'updated_at' => now()]);
             $this->audit('employee.work_rule.updated', 'employee', $data['employeeId'], null, $data);
 
             return response()->json(['ok' => true]);
@@ -513,7 +516,13 @@ class OperationsController extends Controller
         $slots = $this->timeSlots($openingStart, $openingEnd, $buffers, $interval);
         $employeeIds = DB::table('employees')->where('active', true)->where('booking_capacity', true)->pluck('id');
         $absentIds = DB::table('employee_absences')->whereIn('employee_id', $employeeIds)->whereDate('date_from', '<=', $day)->whereDate('date_to', '>=', $day)->pluck('employee_id')->all();
-        $workRules = DB::table('employee_work_rules')->whereIn('employee_id', $employeeIds)->where('weekday', $day->isoWeekday())->where('working', true)->get()->reject(fn ($rule) => in_array($rule->employee_id, $absentIds, true));
+        $cycleWeek = (($day->isoWeek() - 1) % 6) + 1;
+        $workRules = DB::table('employee_work_rules')->whereIn('employee_id', $employeeIds)->where('weekday', $day->isoWeekday())->where('working', true)->get()->filter(function ($rule) use ($cycleWeek) {
+            $cycleWeeks = max(1, (int) ($rule->cycle_weeks ?? 1));
+            $activeCycleWeek = (($cycleWeek - 1) % $cycleWeeks) + 1;
+
+            return (int) ($rule->cycle_week ?? 1) === $activeCycleWeek;
+        })->reject(fn ($rule) => in_array($rule->employee_id, $absentIds, true));
         $staffed = $workRules->pluck('employee_id')->unique()->count();
         $maxCapacity = $configured?->capacity_override ?? $profile?->capacity_per_slot ?? $staffed;
         $maxCapacity = min($staffed, (int) $maxCapacity);
