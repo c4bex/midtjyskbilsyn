@@ -9,6 +9,19 @@ return [
         'timeout' => (int) env('DMR_LOOKUP_TIMEOUT_SECONDS', 5),
     ],
 
+    'ai' => [
+        'enabled' => filter_var(env('AI_ENABLED', false), FILTER_VALIDATE_BOOL),
+        'api_key' => env('OPENAI_API_KEY'),
+        'model' => env('OPENAI_MODEL', 'gpt-5.6-sol'),
+        'timeout' => (int) env('OPENAI_TIMEOUT_SECONDS', 45),
+    ],
+
+    'arvo' => [
+        'enabled' => filter_var(env('ARVO_ENABLED', false), FILTER_VALIDATE_BOOL),
+        'base_url' => env('ARVO_BASE_URL'),
+        'token' => env('ARVO_API_TOKEN'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services

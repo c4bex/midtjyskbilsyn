@@ -26,6 +26,13 @@ x-api-environment: &api-environment
   DMR_LOOKUP_TOKEN: ${DMR_LOOKUP_TOKEN}
   DMR_LOOKUP_DATASET: full
   DMR_LOOKUP_TIMEOUT_SECONDS: 5
+  AI_ENABLED: ${AI_ENABLED:-false}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6-sol}
+  OPENAI_TIMEOUT_SECONDS: 45
+  ARVO_ENABLED: ${ARVO_ENABLED:-false}
+  ARVO_BASE_URL: ${ARVO_BASE_URL:-}
+  ARVO_API_TOKEN: ${ARVO_API_TOKEN:-}
 
 x-api-service: &api-service
   image: midtjysk-bilsyn-api:${APP_IMAGE_TAG:-latest}
@@ -33,6 +40,8 @@ x-api-service: &api-service
     context: https://github.com/c4bex/midtjyskbilsyn.git#main:backend
   restart: unless-stopped
   environment: *api-environment
+  volumes:
+    - ${NAS_DATA_ROOT}/documents:/var/www/html/storage/app/private
   networks: [app]
 
 services:

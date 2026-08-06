@@ -16,6 +16,7 @@ import {
   Plus,
   Search,
   ScanSearch,
+  Sparkles,
   Settings,
   ShieldCheck,
   UserRound,
@@ -29,6 +30,7 @@ import { SmsSettingsView } from "./sms-settings-view";
 import { InvoiceView } from "./invoice-view";
 import { EmployeesView } from "./employees-view";
 import { DriftView } from "./drift-view";
+import { AiAssistant } from "./ai-assistant";
 
 type CustomerType = "private" | "business";
 type BookingStatus = "confirmed" | "arrived" | "awaiting_confirmation" | "completed";
@@ -110,6 +112,7 @@ const emptyForm = { date: "2026-08-04", time: "11:20", customer: "", customerTyp
 
 export function Dashboard() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [activeView, setActiveView] = useState<"bookings" | "customers" | "availability" | "sms" | "invoices" | "employees" | "drift">("bookings");
   const [filter, setFilter] = useState<"alle" | CustomerType>("alle");
@@ -382,6 +385,7 @@ export function Dashboard() {
         </nav>
         <div className="live-actions">
           <span className="live-location">Ikast</span>
+          <button className="ai-launch-button" aria-label="Åbn fagassistent" onClick={() => setAssistantOpen(true)}><Sparkles size={16} /><span>Fagassistent</span></button>
           <button className="icon-button notification" aria-label="Notifikationer" onClick={() => flash("Du har 2 nye driftsbeskeder")}><Bell size={18} /><i /></button>
           <button className="live-profile" aria-label="Profil" onClick={() => setProfileOpen((open) => !open)}><span>RM</span><b>Rasmus</b><ChevronDown size={14} /></button>
           {profileOpen && <div className="live-profile-menu"><button onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}>Log ud</button></div>}
@@ -495,6 +499,9 @@ export function Dashboard() {
       </main>
 
       {notice && <div className="toast" role="status">{notice}</div>}
+
+      <button className="ai-floating-button" aria-label="Åbn fagassistent" onClick={() => setAssistantOpen(true)}><Sparkles size={19} /><span>Spørg fagassistenten</span></button>
+      <AiAssistant open={assistantOpen} onClose={() => setAssistantOpen(false)} booking={selectedBooking} />
 
       {modalOpen && (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setModalOpen(false)}>

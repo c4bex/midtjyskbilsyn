@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\OperationsController;
+use App\Http\Controllers\AiAssistantController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -37,4 +38,14 @@ Route::middleware(['web', 'api.token', 'throttle:120,1'])->group(function () {
     Route::get('/imports', [OperationsController::class, 'imports']);
     Route::post('/imports/validate', [OperationsController::class, 'validateImport'])->middleware('permission:imports.write');
     Route::get('/sms/queue', [OperationsController::class, 'smsQueue']);
+    Route::get('/ai/bootstrap', [AiAssistantController::class, 'bootstrap'])->middleware('permission:ai.use');
+    Route::post('/ai/conversations', [AiAssistantController::class, 'createConversation'])->middleware('permission:ai.use');
+    Route::get('/ai/conversations/{conversation}', [AiAssistantController::class, 'showConversation'])->middleware('permission:ai.use');
+    Route::post('/ai/conversations/{conversation}/messages', [AiAssistantController::class, 'ask'])->middleware('permission:ai.use');
+    Route::get('/ai/documents', [AiAssistantController::class, 'documents'])->middleware('permission:ai.use');
+    Route::post('/ai/documents', [AiAssistantController::class, 'uploadDocument'])->middleware('permission:ai.documents.write');
+    Route::get('/ai/documents/{document}/file', [AiAssistantController::class, 'downloadDocument'])->middleware('permission:ai.use');
+    Route::get('/ai/investigations', [AiAssistantController::class, 'investigations'])->middleware('permission:ai.investigations.read');
+    Route::post('/ai/investigations', [AiAssistantController::class, 'createInvestigation'])->middleware('permission:ai.investigations.write');
+    Route::post('/ai/investigations/{investigation}/arvo', [AiAssistantController::class, 'sendToArvo'])->middleware('permission:ai.arvo.send');
 });

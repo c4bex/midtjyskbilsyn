@@ -1,0 +1,2 @@
+import { proxyLaravel } from "../../../../../../lib/laravel-api";
+export async function POST(request: Request, context: { params: Promise<{ id: string }> }) { const { id } = await context.params; return proxyLaravel(request, `/api/ai/investigations/${encodeURIComponent(id)}/arvo`); }
