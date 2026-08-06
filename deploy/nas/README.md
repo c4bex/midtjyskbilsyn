@@ -14,7 +14,8 @@ Miljøet kører React-brugerfladen, Laravel API, MySQL, kø, scheduler og backup
 - Adgangen sker kun via Tailscale på port `4321`; opret ikke port-forwarding i routeren.
 - Kun Nginx-proxyen har en åben port. Laravel og MySQL er isoleret på Docker-netværket.
 - Login begrænses til fem forsøg pr. minut, mens API-kald begrænses til 120 pr. minut.
-- DMR-token, databasepasswords, applikationsnøgle og admin-password må kun ligge i `deploy/nas/.env` på NAS'en.
+- DMR-token, databasepasswords og applikationsnøgle må kun ligge i `deploy/nas/.env` på NAS'en.
+- Testmiljøets kendte admin-kode er bevidst `test`. Den skal erstattes af en stærk, hemmelig kode, før miljøet må bruges som produktion.
 - Backup kører dagligt og gemmes i `${NAS_DATA_ROOT}/backups` i 14 dage som standard.
 - Kør en restore-test efter første installation og derefter mindst månedligt.
 
