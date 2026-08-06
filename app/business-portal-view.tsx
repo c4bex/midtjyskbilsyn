@@ -22,6 +22,7 @@ export function BusinessPortalView({ onNotify }: { onNotify: (message: string) =
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [userForm, setUserForm] = useState({ name: "", email: "", password: "", role: "employee" });
   const selected = companies.find((company) => company.id === selectedId) ?? null;
 
   useEffect(() => {
@@ -70,6 +71,17 @@ export function BusinessPortalView({ onNotify }: { onNotify: (message: string) =
     }
   };
 
+  const createUser = async () => {
+    if (!selected || !userForm.name || !userForm.email || userForm.password.length < 8) {
+      onNotify("Udfyld navn, e-mail og en adgangskode på mindst 8 tegn");
+      return;
+    }
+    const response = await fetch("/api/business-portal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "user", customerId: selected.id, ...userForm }) });
+    if (!response.ok) { onNotify("Portalbrugeren kunne ikke oprettes"); return; }
+    setUserForm({ name: "", email: "", password: "", role: "employee" });
+    onNotify("Portalbruger oprettet");
+  };
+
   return <section className="portal-view">
     <header className="portal-heading">
       <div><span className="portal-icon"><Building2 size={20} /></span><div><p className="eyebrow">KUNDER OG ADGANG</p><h1>Branchekundeportal</h1><p>Giv erhvervskunder en enkel vej til egne bookinger – med regler, der passer til jer.</p></div></div>
@@ -81,7 +93,7 @@ export function BusinessPortalView({ onNotify }: { onNotify: (message: string) =
         <div className="portal-security"><ShieldCheck size={18} /><span><strong>Sikker adskillelse</strong><small>Kunden kan kun se og ændre egne bookinger. Ingen adgang til interne noter eller andre kunder.</small></span></div>
         <div className="portal-form-grid"><label>Standardafdeling<input value={selected.defaultDepartment ?? ""} onChange={(event) => updateSelected({ defaultDepartment: event.target.value })} placeholder="Ikast" /></label><label>Ændring senest (min.)<input type="number" min={0} value={selected.changeCutoffMinutes} onChange={(event) => updateSelected({ changeCutoffMinutes: Number(event.target.value) })} /></label><label>Booking frem i tiden (dage)<input type="number" min={1} max={365} value={selected.bookingHorizonDays} onChange={(event) => updateSelected({ bookingHorizonDays: Number(event.target.value) })} /></label><label>Rekvisitionsnummer<select value={selected.requisitionRequirement} onChange={(event) => updateSelected({ requisitionRequirement: event.target.value as Company["requisitionRequirement"] })}><option value="hidden">Skjul feltet</option><option value="optional">Valgfrit</option><option value="required">Påkrævet</option></select></label></div>
         <label className="switch-row sms-switch"><input type="checkbox" checked={selected.smsActive} onChange={(event) => updateSelected({ smsActive: event.target.checked })} /><span>SMS-bekræftelser for denne virksomhed</span></label>
-        <div className="portal-actions"><small>Portalbrugere og roller tilføjes i næste trin.</small><button className="primary-button" onClick={save} disabled={saving}>{saving ? "Gemmer…" : "Gem indstillinger"}</button></div>
+        <div className="portal-user-box"><h3>Opret portalbruger</h3><p>Brugeren får kun adgang til denne virksomheds bookinger.</p><div className="portal-form-grid"><label>Navn<input value={userForm.name} onChange={(event) => setUserForm({ ...userForm, name: event.target.value })} /></label><label>E-mail<input type="email" value={userForm.email} onChange={(event) => setUserForm({ ...userForm, email: event.target.value })} /></label><label>Adgangskode<input type="password" minLength={8} value={userForm.password} onChange={(event) => setUserForm({ ...userForm, password: event.target.value })} /></label><label>Rolle<select value={userForm.role} onChange={(event) => setUserForm({ ...userForm, role: event.target.value })}><option value="admin">Administrator</option><option value="employee">Medarbejder</option><option value="read_only">Læseadgang</option></select></label></div><button className="secondary-button" onClick={() => void createUser()}>Opret bruger</button></div><div className="portal-actions"><small>Ændringer gemmes med revisionsspor.</small><button className="primary-button" onClick={save} disabled={saving}>{saving ? "Gemmer…" : "Gem indstillinger"}</button></div>
       </div>}
     </div>}
   </section>;

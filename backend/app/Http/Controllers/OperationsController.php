@@ -47,6 +47,165 @@ class OperationsController extends Controller
         return $this->createBooking($request);
     }
 
+    public function businessPortalLogin(Request $request): JsonResponse
+    {
+        $data = $request->validate(['email' => ['required', 'email'], 'password' => ['required', 'string']]);
+        $user = DB::table('business_portal_users')->where('email', $data['email'])->where('active', true)->first();
+        $active = $user ? DB::table('business_portal_settings')->where('customer_id', $user->customer_id)->where('portal_active', true)->exists() : false;
+        if (! $user || ! $active || ! Hash::check($data['password'], $user->password)) {
+            return response()->json(['error' => 'Forkert e-mail eller adgangskode'], 401);
+        }
+        $request->session()->regenerate();
+        $request->session()->put('business_portal_user_id', (int) $user->id);
+        DB::table('business_portal_users')->where('id', $user->id)->update(['last_login_at' => now(), 'updated_at' => now()]);
+
+        return $this->businessPortalSession($request);
+    }
+
+    public function businessPortalSession(Request $request): JsonResponse
+    {
+        $context = $this->businessPortalContext($request);
+        if (! $context) {
+            return response()->json(['authenticated' => false], 401);
+        }
+
+        return response()->json(['authenticated' => true, 'user' => ['id' => (string) $context['user']->id, 'name' => $context['user']->name, 'email' => $context['user']->email, 'role' => $context['user']->role], 'company' => ['id' => (string) $context['customer']->id, 'name' => $context['customer']->display_name], 'settings' => $context['settings']]);
+    }
+
+    public function businessPortalLogout(Request $request): JsonResponse
+    {
+        $request->session()->forget('business_portal_user_id');
+        $request->session()->regenerateToken();
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function businessPortalDashboard(Request $request): JsonResponse
+    {
+        $context = $this->businessPortalContext($request);
+        if (! $context) {
+            return response()->json(['error' => 'Log ind på branchekundeportalen'], 401);
+        }
+        $rows = DB::table('bookings')->leftJoin('vehicles', 'vehicles.id', '=', 'bookings.vehicle_id')->where('bookings.business_customer_id', $context['customer']->id)->orderByDesc('bookings.starts_at')->limit(200)->get(['bookings.id', 'bookings.starts_at', 'bookings.inspection_type', 'bookings.status', 'bookings.requisition_number', 'bookings.contact_name', 'bookings.customer_note', 'vehicles.registration_normalized', 'vehicles.make', 'vehicles.model']);
+        $bookings = $rows->map(fn ($row) => ['id' => (string) $row->id, 'date' => CarbonImmutable::parse($row->starts_at)->format('Y-m-d'), 'time' => CarbonImmutable::parse($row->starts_at)->format('H:i'), 'inspection' => $row->inspection_type, 'status' => $row->status, 'plate' => $this->formatPlate($row->registration_normalized), 'vehicle' => trim(($row->make ?? '').' '.($row->model ?? '')), 'requisitionNumber' => $row->requisition_number, 'contactName' => $row->contact_name, 'note' => $row->customer_note]);
+
+        return response()->json(['bookings' => $bookings->values(), 'settings' => $context['settings']]);
+    }
+
+    public function businessPortalAvailability(Request $request): JsonResponse
+    {
+        $context = $this->businessPortalContext($request);
+        if (! $context) {
+            return response()->json(['error' => 'Log ind på branchekundeportalen'], 401);
+        }
+        $data = $request->validate(['inspection' => ['required', 'string', 'max:80'], 'from' => ['required', 'date_format:Y-m-d'], 'to' => ['required', 'date_format:Y-m-d']]);
+        $allowed = $context['settings']->allowed_inspection_types ? json_decode($context['settings']->allowed_inspection_types, true) : [];
+        abort_if($allowed && ! in_array($data['inspection'], $allowed, true), 403, 'Synstypen er ikke tilladt for virksomheden');
+        $from = CarbonImmutable::parse($data['from']);
+        $to = CarbonImmutable::parse($data['to']);
+        abort_if($to->lt($from) || $from->diffInDays($to) > min(730, (int) $context['settings']->booking_horizon_days), 422, 'Datoen ligger uden for virksomhedens bookingperiode');
+        $days = [];
+        for ($date = $from; $date->lte($to); $date = $date->addDay()) {
+            $availability = $this->availabilityForDate($date->toDateString(), $data['inspection']);
+            $days[] = ['date' => $date->toDateString(), 'availableSlots' => $availability['availableSlots'], 'availableCount' => count($availability['availableSlots'])];
+        }
+
+        return response()->json(['days' => $days]);
+    }
+
+    public function businessPortalCreateBooking(Request $request): JsonResponse
+    {
+        $context = $this->businessPortalContext($request);
+        if (! $context) {
+            return response()->json(['error' => 'Log ind på branchekundeportalen'], 401);
+        }
+        $data = $request->validate(['plate' => ['required', 'string', 'max:12'], 'vehicle' => ['nullable', 'string', 'max:200'], 'date' => ['required', 'date_format:Y-m-d'], 'time' => ['required', 'date_format:H:i'], 'inspection' => ['required', 'string', 'max:80'], 'requisitionNumber' => ['nullable', 'string', 'max:100'], 'contactName' => ['nullable', 'string', 'max:160'], 'customerNote' => ['nullable', 'string', 'max:1000']]);
+        $settings = $context['settings'];
+        $allowed = $settings->allowed_inspection_types ? json_decode($settings->allowed_inspection_types, true) : [];
+        abort_if($allowed && ! in_array($data['inspection'], $allowed, true), 403, 'Synstypen er ikke tilladt for virksomheden');
+        if ($settings->requisition_requirement === 'required' && trim((string) ($data['requisitionNumber'] ?? '')) === '') {
+            return response()->json(['error' => 'Rekvisitionsnummer skal udfyldes'], 422);
+        }
+        $startsAt = CarbonImmutable::createFromFormat('Y-m-d H:i', $data['date'].' '.$data['time']);
+        abort_if($startsAt->isBefore(now()), 422, 'Vælg et tidspunkt i fremtiden');
+        $definition = $this->inspectionDefinition($data['inspection']);
+        $availability = $this->availabilityForDate($data['date'], $data['inspection']);
+        if (! in_array($data['time'], $availability['availableSlots'], true)) {
+            return response()->json(['error' => 'Tidspunktet er ikke ledigt'], 409);
+        }
+        $registration = $this->normalizePlate($data['plate']);
+        $vehicleWords = preg_split('/\s+/', trim($data['vehicle'] ?? '')) ?: [];
+        $make = array_shift($vehicleWords) ?: null;
+        $model = trim(implode(' ', $vehicleWords)) ?: null;
+        $vehicle = DB::table('vehicles')->where('registration_normalized', $registration)->first();
+        if (! $vehicle) {
+            $vehicleId = DB::table('vehicles')->insertGetId(['customer_id' => $context['customer']->id, 'registration_normalized' => $registration, 'make' => $make, 'model' => $model, 'created_at' => now(), 'updated_at' => now()]);
+        } else {
+            $vehicleId = $vehicle->id;
+            DB::table('vehicles')->where('id', $vehicleId)->update(['make' => $make ?: $vehicle->make, 'model' => $model ?: $vehicle->model, 'updated_at' => now()]);
+        }
+        $id = DB::table('bookings')->insertGetId(['customer_id' => $context['customer']->id, 'business_customer_id' => $context['customer']->id, 'business_portal_user_id' => $context['user']->id, 'vehicle_id' => $vehicleId, 'starts_at' => $startsAt, 'ends_at' => $startsAt->addMinutes($definition['requiredSlots'] * $availability['intervalMinutes']), 'slot_count' => $definition['requiredSlots'], 'inspection_type' => $data['inspection'], 'requisition_number' => $data['requisitionNumber'] ?? null, 'contact_name' => $data['contactName'] ?? null, 'customer_note' => $data['customerNote'] ?? null, 'status' => 'confirmed', 'source' => 'business_portal', 'booking_channel' => 'business_portal', 'created_at' => now(), 'updated_at' => now()]);
+        $this->audit('business_portal.booking.created', 'booking', $id, null, ['businessCustomerId' => $context['customer']->id, ...$data]);
+
+        return response()->json(['booking' => ['id' => (string) $id]], 201);
+    }
+
+    public function businessPortalUpdateBooking(Request $request, int $booking): JsonResponse
+    {
+        $context = $this->businessPortalContext($request);
+        $current = $context ? DB::table('bookings')->where('id', $booking)->where('business_customer_id', $context['customer']->id)->first() : null;
+        if (! $context || ! $current) {
+            return response()->json(['error' => 'Bookingen findes ikke'], 404);
+        }
+        $cutoff = CarbonImmutable::parse($current->starts_at)->subMinutes((int) $context['settings']->change_cutoff_minutes);
+        if (now()->gte($cutoff)) {
+            return response()->json(['error' => 'Tiden kan ikke ændres så tæt på synet'], 422);
+        }
+        if ($request->input('action') === 'cancel') {
+            return $this->businessPortalDeleteBooking($request, $booking);
+        }
+        $request->merge(['customer' => $context['customer']->display_name, 'customerType' => 'business', 'source' => 'business_portal', 'phone' => null]);
+        $response = $this->updateBooking($request, $booking);
+        DB::table('bookings')->where('id', $booking)->update(['business_portal_user_id' => $context['user']->id, 'booking_channel' => 'business_portal', 'updated_at' => now()]);
+
+        return $response;
+    }
+
+    public function businessPortalDeleteBooking(Request $request, int $booking): JsonResponse
+    {
+        $context = $this->businessPortalContext($request);
+        $current = $context ? DB::table('bookings')->where('id', $booking)->where('business_customer_id', $context['customer']->id)->first() : null;
+        if (! $context || ! $current) {
+            return response()->json(['error' => 'Bookingen findes ikke'], 404);
+        }
+        $cutoff = CarbonImmutable::parse($current->starts_at)->subMinutes((int) $context['settings']->change_cutoff_minutes);
+        if (now()->gte($cutoff)) {
+            return response()->json(['error' => 'Tiden kan ikke aflyses så tæt på synet'], 422);
+        }
+        DB::table('bookings')->where('id', $booking)->update(['status' => 'cancelled', 'updated_at' => now()]);
+        $this->audit('business_portal.booking.cancelled', 'booking', $booking, (array) $current, ['status' => 'cancelled', 'businessCustomerId' => $context['customer']->id]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    private function businessPortalContext(Request $request): ?array
+    {
+        $userId = $request->session()->get('business_portal_user_id');
+        if (! $userId) {
+            return null;
+        }
+        $user = DB::table('business_portal_users')->where('id', $userId)->where('active', true)->first();
+        $settings = $user ? DB::table('business_portal_settings')->where('customer_id', $user->customer_id)->where('portal_active', true)->first() : null;
+        $customer = $settings ? DB::table('customers')->where('id', $user->customer_id)->where('customer_type', 'business')->first() : null;
+        if (! $user || ! $settings || ! $customer) {
+            $request->session()->forget('business_portal_user_id');
+
+            return null;
+        }
+
+        return compact('user', 'settings', 'customer');
+    }
+
     public function health(): JsonResponse
     {
         try {

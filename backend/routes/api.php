@@ -44,6 +44,18 @@ Route::middleware(['web', 'throttle:30,1'])->prefix('public')->group(function ()
     Route::post('/bookings', [OperationsController::class, 'publicCreateBooking']);
 });
 
+// Ekstern branchekundeportal: separat session, men samme kalender og bookingmotor.
+Route::middleware(['web', 'throttle:60,1'])->prefix('portal')->group(function () {
+    Route::post('/login', [OperationsController::class, 'businessPortalLogin'])->middleware('throttle:10,1');
+    Route::get('/session', [OperationsController::class, 'businessPortalSession']);
+    Route::post('/logout', [OperationsController::class, 'businessPortalLogout']);
+    Route::get('/dashboard', [OperationsController::class, 'businessPortalDashboard']);
+    Route::get('/availability', [OperationsController::class, 'businessPortalAvailability']);
+    Route::post('/bookings', [OperationsController::class, 'businessPortalCreateBooking']);
+    Route::patch('/bookings/{booking}', [OperationsController::class, 'businessPortalUpdateBooking']);
+    Route::delete('/bookings/{booking}', [OperationsController::class, 'businessPortalDeleteBooking']);
+});
+
 Route::middleware(['web', 'api.token', 'throttle:120,1'])->group(function () {
     Route::get('/health', [OperationsController::class, 'health']);
     Route::get('/bookings', [OperationsController::class, 'bookings']);
