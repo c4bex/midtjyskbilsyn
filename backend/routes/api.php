@@ -40,6 +40,7 @@ Route::middleware('web')->group(function () use ($sessionPayload) {
 Route::middleware(['web', 'throttle:30,1'])->prefix('public')->group(function () {
     Route::get('/config', [OperationsController::class, 'publicConfig']);
     Route::get('/availability', [OperationsController::class, 'publicAvailability']);
+    Route::get('/vehicle-lookup', [OperationsController::class, 'publicVehicleLookup'])->middleware('throttle:20,1');
     Route::post('/bookings', [OperationsController::class, 'publicCreateBooking']);
 });
 
