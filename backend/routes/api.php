@@ -46,7 +46,7 @@ Route::middleware(['web', 'api.token', 'throttle:120,1'])->group(function () {
     Route::patch('/availability', [OperationsController::class, 'updateAvailability'])->middleware('permission:settings.write');
     Route::post('/availability', [OperationsController::class, 'createClosure'])->middleware('permission:settings.write');
     Route::delete('/availability/{rule}', [OperationsController::class, 'deleteClosure'])->middleware('permission:settings.write');
-    Route::get('/employees', [OperationsController::class, 'employees']);
+    Route::get('/employees', [OperationsController::class, 'employees'])->middleware('permission:employees.write');
     Route::post('/employees', [OperationsController::class, 'updateEmployee'])->middleware('permission:employees.write');
     Route::get('/invoices', [OperationsController::class, 'invoices']);
     Route::patch('/invoices', [OperationsController::class, 'updateInvoice'])->middleware('permission:invoices.write');

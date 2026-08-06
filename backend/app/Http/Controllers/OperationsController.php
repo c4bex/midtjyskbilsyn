@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Middleware\Permission;
 use App\Services\DmrLookupService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -295,7 +296,15 @@ class OperationsController extends Controller
 
     public function employees(): JsonResponse
     {
-        return response()->json(['employees' => DB::table('employees')->orderBy('display_name')->get()->map(fn ($employee) => ['id' => (string) $employee->id, 'name' => $employee->display_name, 'role' => $employee->role, 'active' => (bool) $employee->active, 'bookingCapacity' => (bool) $employee->booking_capacity]), 'absences' => DB::table('employee_absences')->orderBy('date_from')->get(), 'workRules' => DB::table('employee_work_rules')->orderBy('employee_id')->orderBy('weekday')->get()]);
+        $permissionRows = DB::table('employee_permissions')->get()->groupBy('employee_id');
+        $employees = DB::table('employees')->orderBy('display_name')->get()->map(function ($employee) use ($permissionRows) {
+            $rows = $permissionRows->get($employee->id, collect());
+            $allowed = $rows->isNotEmpty() ? $rows->where('allowed', true)->pluck('permission_key')->values()->all() : Permission::rolePermissions((string) $employee->role);
+
+            return ['id' => (string) $employee->id, 'name' => $employee->display_name, 'role' => $employee->role, 'active' => (bool) $employee->active, 'bookingCapacity' => (bool) $employee->booking_capacity, 'permissions' => $allowed];
+        });
+
+        return response()->json(['permissionCatalog' => Permission::catalog(), 'employees' => $employees, 'absences' => DB::table('employee_absences')->orderBy('date_from')->get(), 'workRules' => DB::table('employee_work_rules')->orderBy('employee_id')->orderBy('weekday')->get()]);
     }
 
     public function updateEmployee(Request $request): JsonResponse
@@ -315,6 +324,20 @@ class OperationsController extends Controller
             abort_if($cycleWeek > $cycleWeeks, 422, 'Uge i rul skal være inden for rullets længde');
             DB::table('employee_work_rules')->updateOrInsert(['employee_id' => $data['employeeId'], 'weekday' => $data['weekday']], ['starts_at' => $data['startsAt'] ?? null, 'ends_at' => $data['endsAt'] ?? null, 'working' => $data['working'], 'cycle_weeks' => $cycleWeeks, 'cycle_week' => $cycleWeek, 'created_at' => now(), 'updated_at' => now()]);
             $this->audit('employee.work_rule.updated', 'employee', $data['employeeId'], null, $data);
+
+            return response()->json(['ok' => true]);
+        }
+        if ($type === 'employee_permissions') {
+            $data = $request->validate(['employeeId' => ['required', 'integer', 'exists:employees,id'], 'permissions' => ['required', 'array']]);
+            $catalog = Permission::catalog();
+            $permissions = collect($data['permissions'])->filter(fn ($allowed, $key) => array_key_exists($key, $catalog))->map(fn ($allowed) => (bool) $allowed);
+            DB::transaction(function () use ($data, $permissions, $catalog) {
+                DB::table('employee_permissions')->where('employee_id', $data['employeeId'])->delete();
+                $now = now();
+                $rows = collect($catalog)->keys()->map(fn ($key) => ['employee_id' => $data['employeeId'], 'permission_key' => $key, 'allowed' => $permissions->get($key, false), 'created_at' => $now, 'updated_at' => $now])->all();
+                DB::table('employee_permissions')->insert($rows);
+            });
+            $this->audit('employee.permissions.updated', 'employee', $data['employeeId'], null, ['permissions' => $permissions->filter()->keys()->values()->all()]);
 
             return response()->json(['ok' => true]);
         }

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\Permission;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -60,6 +61,19 @@ class OperationsApiTest extends TestCase
 
         $this->actingAs($this->user)->getJson('/api/search?q=EN48111')->assertOk()->assertJsonPath('results.0.type', 'booking')->assertJsonPath('results.0.booking.id', (string) $bookingId)->assertJsonPath('results.0.booking.date', $nearDate);
         $this->actingAs($this->user)->getJson('/api/search?q=REKV-2026-42')->assertOk()->assertJsonPath('results.0.booking.requisitionNumber', 'REKV-2026-42');
+    }
+
+    public function test_employee_permissions_can_restrict_booking_writes(): void
+    {
+        $now = now();
+        foreach (array_keys(Permission::catalog()) as $key) {
+            DB::table('employee_permissions')->insert(['employee_id' => DB::table('employees')->where('user_id', $this->user->id)->value('id'), 'permission_key' => $key, 'allowed' => $key !== 'bookings.write', 'created_at' => $now, 'updated_at' => $now]);
+        }
+
+        $this->actingAs($this->user)->postJson('/api/bookings', [
+            'customer' => 'Begrænset bruger', 'customerType' => 'private', 'plate' => 'ZZ12345', 'vehicle' => 'Volkswagen Golf',
+            'date' => now()->addDays(3)->toDateString(), 'time' => '08:00', 'inspection' => 'Periodisk syn',
+        ])->assertForbidden();
     }
 
     public function test_calendar_returns_available_slots_from_mysql_rules(): void

@@ -3,11 +3,13 @@
 import { CalendarDays, Clock3, ShieldCheck, UserRound, UsersRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-type Employee = { id: string; name: string; role: string; active: boolean; bookingCapacity: boolean; initials: string };
+type PermissionMeta = { label: string; group: string };
+type Employee = { id: string; name: string; role: string; active: boolean; bookingCapacity: boolean; initials: string; permissions: string[] };
 type WorkTime = { start: string; end: string; working: boolean; cycleWeeks: number; cycleWeek: number };
 type Absence = { id: string; employeeId: string; kind: string; dateFrom: string; dateTo: string; note?: string };
 type EmployeeResponse = {
-  employees: Array<{ id: string; name: string; role: string; active: boolean; bookingCapacity: boolean }>;
+  permissionCatalog: Record<string, PermissionMeta>;
+  employees: Array<{ id: string; name: string; role: string; active: boolean; bookingCapacity: boolean; permissions?: string[] }>;
   absences: Array<{ id: string; employee_id: string; kind: string; date_from: string; date_to: string; note?: string }>;
   workRules: Array<{ employee_id: string; weekday: number; starts_at: string | null; ends_at: string | null; working: boolean | number; cycle_weeks?: number; cycle_week?: number }>;
 };
@@ -16,16 +18,19 @@ const days = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag", "S�
 const defaultTimes = (): Record<number, WorkTime> => Object.fromEntries(days.map((_, index) => [index + 1, { start: "08:00", end: index === 4 ? "15:40" : "16:00", working: index < 5, cycleWeeks: 1, cycleWeek: 1 }]));
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 const demo: Employee[] = [
-  { id: "1", name: "Peter Hartz Jensen", role: "Synsinspektør", active: true, bookingCapacity: true, initials: "PH" },
-  { id: "2", name: "Rasmus Havn Mouritzen", role: "Teknisk ansvarlig / Ejer", active: true, bookingCapacity: true, initials: "RH" },
-  { id: "3", name: "Pernille Havn Mouritzen", role: "Bogholder / blæksprut", active: true, bookingCapacity: false, initials: "PM" },
+  { id: "1", name: "Peter Hartz Jensen", role: "Synsinspektør", active: true, bookingCapacity: true, initials: "PH", permissions: [] },
+  { id: "2", name: "Rasmus Havn Mouritzen", role: "Teknisk ansvarlig / Ejer", active: true, bookingCapacity: true, initials: "RH", permissions: [] },
+  { id: "3", name: "Pernille Havn Mouritzen", role: "Bogholder / blæksprut", active: true, bookingCapacity: false, initials: "PM", permissions: [] },
 ];
 
 export function EmployeesView({ onNotify }: { onNotify: (message: string) => void }) {
   const [employees, setEmployees] = useState(demo);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("1");
-  const [tab, setTab] = useState<"people" | "hours" | "absence">("people");
+  const [tab, setTab] = useState<"people" | "hours" | "absence" | "access">("people");
+  const [permissionCatalog, setPermissionCatalog] = useState<Record<string, PermissionMeta>>({});
+  const [permissionDraft, setPermissionDraft] = useState<Record<string, string[]>>({});
+  const [savingPermissions, setSavingPermissions] = useState(false);
   const [absenceForm, setAbsenceForm] = useState({ employeeId: "1", kind: "Ferie", dateFrom: "", dateTo: "", note: "" });
   const [absences, setAbsences] = useState<Absence[]>([]);
   const [workTimes, setWorkTimes] = useState<Record<string, Record<number, WorkTime>>>({});
@@ -33,8 +38,10 @@ export function EmployeesView({ onNotify }: { onNotify: (message: string) => voi
 
   useEffect(() => {
     void fetch("/api/employees", { cache: "no-store" }).then((response) => response.ok ? response.json() as Promise<EmployeeResponse> : Promise.reject()).then((data) => {
-      const loaded = data.employees.map((employee) => ({ ...employee, initials: initials(employee.name) }));
+      const loaded = data.employees.map((employee) => ({ ...employee, permissions: employee.permissions ?? [], initials: initials(employee.name) }));
       setEmployees(loaded);
+      setPermissionCatalog(data.permissionCatalog);
+      setPermissionDraft(Object.fromEntries(loaded.map((employee) => [employee.id, employee.permissions])));
       if (loaded.length > 0) {
         setSelectedEmployeeId((current) => loaded.some((employee) => employee.id === current) ? current : loaded[0].id);
         setAbsenceForm((current) => ({ ...current, employeeId: loaded.some((employee) => employee.id === current.employeeId) ? current.employeeId : loaded[0].id }));
@@ -79,6 +86,21 @@ export function EmployeesView({ onNotify }: { onNotify: (message: string) => voi
     onNotify("Medarbejderen og bookingrollen er opdateret");
   };
 
+  const savePermissions = async () => {
+    if (!selectedEmployee) return;
+    setSavingPermissions(true);
+    try {
+      const response = await fetch("/api/employees", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "employee_permissions", employeeId: selectedEmployee.id, permissions: Object.fromEntries(Object.keys(permissionCatalog).map((key) => [key, permissionDraft[selectedEmployee.id]?.includes(key) ?? false])) }) });
+      if (!response.ok) throw new Error();
+      const permissions = permissionDraft[selectedEmployee.id] ?? [];
+      setEmployees((current) => current.map((employee) => employee.id === selectedEmployee.id ? { ...employee, permissions } : employee));
+      onNotify(`${selectedEmployee.name}s rettigheder er gemt`);
+    } catch { onNotify("Rettighederne kunne ikke gemmes"); }
+    finally { setSavingPermissions(false); }
+  };
+
+  const togglePermission = (key: string) => setPermissionDraft((current) => ({ ...current, [selectedEmployeeId]: (current[selectedEmployeeId] ?? []).includes(key) ? (current[selectedEmployeeId] ?? []).filter((item) => item !== key) : [...(current[selectedEmployeeId] ?? []), key] }));
+
   const saveWorkTimes = async () => {
     if (!selectedEmployee) return;
     setSavingTimes(true);
@@ -98,10 +120,12 @@ export function EmployeesView({ onNotify }: { onNotify: (message: string) => voi
 
   return <div className="module-view employees-view">
     <section className="page-heading"><div><p className="eyebrow">Administration · Bemanding</p><h1>Medarbejdere</h1><p>Arbejdsplanen bestemmer automatisk, hvor mange biler der kan bookes.</p></div></section>
-    <div className="employee-tabs"><button className={tab === "people" ? "selected" : ""} onClick={() => setTab("people")}><UserRound size={15} /> Medarbejdere</button><button className={tab === "hours" ? "selected" : ""} onClick={() => setTab("hours")}><Clock3 size={15} /> Arbejdsplan</button><button className={tab === "absence" ? "selected" : ""} onClick={() => setTab("absence")}><CalendarDays size={15} /> Ferie og fravær</button></div>
+    <div className="employee-tabs"><button className={tab === "people" ? "selected" : ""} onClick={() => setTab("people")}><UserRound size={15} /> Medarbejdere</button><button className={tab === "hours" ? "selected" : ""} onClick={() => setTab("hours")}><Clock3 size={15} /> Arbejdsplan</button><button className={tab === "absence" ? "selected" : ""} onClick={() => setTab("absence")}><CalendarDays size={15} /> Ferie og fravær</button><button className={tab === "access" ? "selected" : ""} onClick={() => setTab("access")}><ShieldCheck size={15} /> Adgang</button></div>
     <section className="employee-summary"><div><span>Aktive medarbejdere</span><strong>{active}</strong></div><div><span>Bookingkapacitet i dag</span><strong>{capacityToday}</strong></div><div><span>Planlagt fravær</span><strong>{absences.length}</strong></div></section>
 
     {tab === "people" && <section className="employee-card"><div className="employee-table-head"><span>Navn</span><span>Rolle</span><span>Arbejdsplan</span><span>Status</span><span></span></div>{employees.map((employee) => <article className="employee-row" key={employee.id}><span className="employee-name"><i>{employee.initials}</i><span><strong>{employee.name}</strong>{employee.bookingCapacity && <small>Åbner bookingtider</small>}</span></span><span>{employee.role}</span><span>{workSummary(employee)}</span><em className={employee.active ? "active" : "away"}>{employee.active ? "Aktiv" : "Inaktiv"}</em><button className="secondary-button" onClick={() => setEditingEmployee(employee)}>Rediger</button></article>)}{editingEmployee && <div className="employee-edit capacity-edit"><input value={editingEmployee.name} onChange={(event) => setEditingEmployee({ ...editingEmployee, name: event.target.value, initials: initials(event.target.value) })} /><input value={editingEmployee.role} onChange={(event) => setEditingEmployee({ ...editingEmployee, role: event.target.value })} /><select value={editingEmployee.active ? "active" : "inactive"} onChange={(event) => setEditingEmployee({ ...editingEmployee, active: event.target.value === "active" })}><option value="active">Aktiv</option><option value="inactive">Inaktiv</option></select><label className="capacity-toggle"><input type="checkbox" checked={editingEmployee.bookingCapacity} onChange={(event) => setEditingEmployee({ ...editingEmployee, bookingCapacity: event.target.checked })} /> Åbner tider til booking</label><button className="primary-button" onClick={() => void saveEmployee()}>Gem</button><button className="secondary-button" onClick={() => setEditingEmployee(null)}>Annuller</button></div>}</section>}
+
+    {tab === "access" && <section className="employee-card permissions-card"><div className="schedule-heading"><div><h2>Adgang og rettigheder</h2><p>Vælg præcis hvad medarbejderen må se og ændre. Ændringer gælder med det samme ved næste handling.</p></div><select value={selectedEmployeeId} onChange={(event) => setSelectedEmployeeId(event.target.value)}>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></div>{Object.entries(permissionCatalog).reduce<Array<[string, Array<[string, PermissionMeta]>]>>((groups, entry) => { const [key, meta] = entry; const group = groups.find((item) => item[0] === meta.group); if (group) group[1].push([key, meta]); else groups.push([meta.group, [[key, meta]]]); return groups; }, []).map(([group, items]) => <div className="permission-group" key={group}><h3>{group}</h3>{items.map(([key, meta]) => <label className="permission-row" key={key}><input type="checkbox" checked={permissionDraft[selectedEmployeeId]?.includes(key) ?? false} onChange={() => togglePermission(key)} /><span><strong>{meta.label}</strong><small>{key}</small></span></label>)}</div>)}<button className="primary-button" disabled={savingPermissions || !selectedEmployee} onClick={() => void savePermissions()}>{savingPermissions ? "Gemmer…" : "Gem rettigheder"}</button></section>}
 
     {tab === "hours" && <><section className="employee-card schedule-card"><div className="schedule-heading"><div><h2>Fast arbejdsplan</h2><p>Vælg medarbejder og markér præcis de dage, personen arbejder.</p></div><select value={selectedEmployeeId} onChange={(event) => setSelectedEmployeeId(event.target.value)}>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></div>{selectedEmployee && <div className={`capacity-info ${selectedEmployee.bookingCapacity ? "counts" : ""}`}><UsersRound size={18} /><div><strong>{selectedEmployee.bookingCapacity ? "Denne medarbejder åbner ekstra bookingpladser" : "Denne medarbejder påvirker ikke antallet af tider"}</strong><small>Indstillingen ændres under fanen Medarbejdere.</small></div></div>}{days.map((day, index) => { const times = selectedTimes[index + 1]; return <div className={`schedule-row ${times.working ? "" : "day-off"}`} key={day}><strong>{day}</strong><span><input type="time" value={times.start} disabled={!times.working} onChange={(event) => updateTime(index + 1, { start: event.target.value })} /> – <input type="time" value={times.end} disabled={!times.working} onChange={(event) => updateTime(index + 1, { end: event.target.value })} /></span><label><input type="checkbox" checked={times.working} onChange={(event) => updateTime(index + 1, { working: event.target.checked })} /> {times.working ? "På arbejde" : "Fast fridag"}</label><label className="cycle-control">Rul<select value={times.cycleWeeks} disabled={!times.working} onChange={(event) => updateTime(index + 1, { cycleWeeks: Number(event.target.value), cycleWeek: Math.min(times.cycleWeek, Number(event.target.value)) })}><option value="1">Hver uge</option><option value="2">Hver 2. uge</option><option value="3">Hver 3. uge</option></select></label>{times.cycleWeeks > 1 && <label className="cycle-control">Uge i rul<select value={times.cycleWeek} disabled={!times.working} onChange={(event) => updateTime(index + 1, { cycleWeek: Number(event.target.value) })}>{Array.from({ length: times.cycleWeeks }, (_, week) => <option value={week + 1} key={week}>Uge {week + 1}</option>)}</select></label>}</div>; })}<p className="schedule-help">Et rul regnes efter ISO-ugen. Sæt fx to medarbejdere til “Hver 2. uge” og vælg uge 1 og uge 2 for skiftende mandage.</p><button className="primary-button" disabled={savingTimes} onClick={() => void saveWorkTimes()}>{savingTimes ? "Gemmer…" : "Gem arbejdsplan"}</button></section><section className="employee-card capacity-week"><h2>Bookingkapacitet pr. dag</h2><p>Antal samtidige biler systemet kan tage imod ud fra den faste plan.</p><div>{weekCapacity.map((item) => <article key={item.day}><span>{item.day.slice(0, 3)}</span><strong>{item.count}</strong><small>{item.count === 1 ? "bil ad gangen" : "biler ad gangen"}</small></article>)}</div></section></>}
 
