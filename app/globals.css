@@ -604,6 +604,7 @@ main { grid-column: 2; min-width: 0; }
 
 .public-vehicle-status { margin: -4px 0 1px; padding: 8px 10px; border: 1px solid #454b4d; border-radius: 7px; color: #aeb4b6; background: #202425; font-size: 10px; }
 .public-vehicle-status.found { border-color: #579b82; color: #bcebd8; background: #18382e; }
+.public-step:has(.public-form) > .public-eyebrow { margin: 0 0 18px; padding: 16px 18px; border: 1px solid #5b6264; border-radius: 12px; color: #fff; background: linear-gradient(135deg, #2a2e30, #202426); font-size: clamp(16px, 3vw, 22px); font-weight: 800; letter-spacing: .01em; line-height: 1.25; box-shadow: 0 10px 24px rgba(0,0,0,.18); }
 
 .schedule-row .cycle-control { display: grid; gap: 3px; align-items: start; font-size: 7px; font-weight: 700; }
 .cycle-control select { min-width: 105px; height: 28px; padding: 0 6px; border: 1px solid #d8e1e8; border-radius: 6px; color: #526474; background: #fff; font-size: 8px; }
