@@ -72,19 +72,19 @@ class OperationsController extends Controller
             $vehicle = DB::table('vehicles')->where('registration_normalized', $registration)->first();
             if ($vehicle) {
                 $customerId = $vehicle->customer_id ?: DB::table('customers')->insertGetId(['display_name' => $input['customer'], 'customer_type' => $input['customerType'], 'created_at' => now(), 'updated_at' => now()]);
-                DB::table('customers')->where('id', $customerId)->update(['display_name' => $input['customer'], 'customer_type' => $input['customerType'], 'updated_at' => now()]);
+                DB::table('customers')->where('id', $customerId)->update(['display_name' => $input['customer'], 'customer_type' => $input['customerType'], 'phone' => $input['phone'] ?? null, 'updated_at' => now()]);
                 DB::table('vehicles')->where('id', $vehicle->id)->update(['customer_id' => $customerId, 'make' => $make, 'model' => $model, 'updated_at' => now()]);
                 $vehicleId = $vehicle->id;
             } else {
-                $customerId = DB::table('customers')->insertGetId(['display_name' => $input['customer'], 'customer_type' => $input['customerType'], 'created_at' => now(), 'updated_at' => now()]);
+                $customerId = DB::table('customers')->insertGetId(['display_name' => $input['customer'], 'customer_type' => $input['customerType'], 'phone' => $input['phone'] ?? null, 'created_at' => now(), 'updated_at' => now()]);
                 $vehicleId = DB::table('vehicles')->insertGetId(['customer_id' => $customerId, 'registration_normalized' => $registration, 'make' => $make, 'model' => $model, 'created_at' => now(), 'updated_at' => now()]);
             }
             $id = DB::table('bookings')->insertGetId(['customer_id' => $customerId, 'vehicle_id' => $vehicleId, 'starts_at' => $startsAt, 'ends_at' => $startsAt->addMinutes($definition['requiredSlots'] * $availability['intervalMinutes']), 'slot_count' => $definition['requiredSlots'], 'inspection_type' => $input['inspection'], 'status' => $input['status'] ?? 'confirmed', 'source' => 'manual', 'created_at' => now(), 'updated_at' => now()]);
             $this->audit('booking.created', 'booking', $id, null, $input);
             if ($input['customerType'] === 'private') {
-                DB::table('sms_messages')->insert(['booking_id' => $id, 'kind' => 'confirmation', 'status' => 'held', 'idempotency_key' => 'booking:'.$id.':confirmation', 'available_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+                $this->queueSms($id, 'confirmation', $customerId, $input['phone'] ?? null, $startsAt, $registration);
                 if ($startsAt->isAfter(now()->addDay())) {
-                    DB::table('sms_messages')->insert(['booking_id' => $id, 'kind' => 'reminder', 'status' => 'held', 'idempotency_key' => 'booking:'.$id.':reminder', 'available_at' => $startsAt->subDay(), 'created_at' => now(), 'updated_at' => now()]);
+                    $this->queueSms($id, 'reminder', $customerId, $input['phone'] ?? null, $startsAt, $registration);
                 }
             }
 
@@ -117,7 +117,7 @@ class OperationsController extends Controller
             if (! in_array($input['time'], $availability['availableSlots'], true)) {
                 return response()->json(['error' => $definition['requiredSlots'] > 1 ? 'Toldsynet kræver to sammenhængende ledige tider' : 'Det valgte tidspunkt har ikke flere ledige pladser'], 409);
             }
-            DB::table('customers')->where('id', $current->customer_id)->update(['display_name' => $input['customer'], 'customer_type' => $input['customerType'], 'updated_at' => now()]);
+            DB::table('customers')->where('id', $current->customer_id)->update(['display_name' => $input['customer'], 'customer_type' => $input['customerType'], 'phone' => $input['phone'] ?? null, 'updated_at' => now()]);
             DB::table('vehicles')->where('id', $current->vehicle_id)->update(['registration_normalized' => $this->normalizePlate($input['plate']), 'make' => $make, 'model' => $model, 'updated_at' => now()]);
             DB::table('bookings')->where('id', $booking)->update(['starts_at' => $startsAt, 'ends_at' => $startsAt->addMinutes($definition['requiredSlots'] * $availability['intervalMinutes']), 'slot_count' => $definition['requiredSlots'], 'inspection_type' => $input['inspection'], 'updated_at' => now()]);
             $this->audit('booking.updated', 'booking', $booking, (array) $current, $input);
@@ -503,11 +503,104 @@ class OperationsController extends Controller
         return response()->json(['counts' => $counts, 'total' => $counts->sum(), 'enabled' => false]);
     }
 
+    public function smsSettings(): JsonResponse
+    {
+        $settings = DB::table('sms_settings')->first();
+        $settings ??= (object) ['enabled' => false, 'provider' => 'gatewayapi', 'sender_id' => 'MB Bilsyn', 'reminder_time' => '15:00:00', 'quiet_start' => '21:00:00', 'quiet_end' => '07:00:00', 'private_confirmation' => true, 'private_reminder' => true, 'private_change' => true, 'business_enabled' => false, 'auto_retry' => true, 'max_retry_attempts' => 3];
+
+        return response()->json(['settings' => $settings, 'providerReady' => false]);
+    }
+
+    public function updateSmsSettings(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'senderId' => ['required', 'string', 'max:11'], 'reminderTime' => ['required', 'date_format:H:i'],
+            'quietStart' => ['required', 'date_format:H:i'], 'quietEnd' => ['required', 'date_format:H:i'],
+            'privateConfirmation' => ['required', 'boolean'], 'privateReminder' => ['required', 'boolean'], 'privateChange' => ['required', 'boolean'],
+            'businessEnabled' => ['required', 'boolean'], 'autoRetry' => ['required', 'boolean'], 'maxRetryAttempts' => ['required', 'integer', 'between:0,9'],
+        ]);
+        $values = ['sender_id' => $data['senderId'], 'reminder_time' => $data['reminderTime'], 'quiet_start' => $data['quietStart'], 'quiet_end' => $data['quietEnd'], 'private_confirmation' => $data['privateConfirmation'], 'private_reminder' => $data['privateReminder'], 'private_change' => $data['privateChange'], 'business_enabled' => $data['businessEnabled'], 'auto_retry' => $data['autoRetry'], 'max_retry_attempts' => $data['maxRetryAttempts'], 'updated_at' => now()];
+        DB::table('sms_settings')->updateOrInsert(['id' => 1], $values + ['enabled' => false, 'provider' => 'gatewayapi', 'created_at' => now()]);
+        $this->audit('sms.settings.updated', 'sms_settings', 1, null, $data);
+
+        return response()->json(['settings' => DB::table('sms_settings')->where('id', 1)->first(), 'providerReady' => false]);
+    }
+
+    public function smsTemplates(): JsonResponse
+    {
+        return response()->json(['templates' => DB::table('sms_templates')->orderBy('audience')->orderBy('name')->get()]);
+    }
+
+    public function updateSmsTemplate(Request $request, string $code): JsonResponse
+    {
+        $data = $request->validate(['body' => ['required', 'string', 'max:1600'], 'enabled' => ['required', 'boolean']]);
+        $template = DB::table('sms_templates')->where('code', $code)->first();
+        if (! $template) {
+            return response()->json(['error' => 'SMS-skabelonen findes ikke'], 404);
+        }
+        DB::table('sms_templates')->where('id', $template->id)->update(['body' => $data['body'], 'enabled' => $data['enabled'], 'version' => ((int) $template->version) + 1, 'updated_at' => now()]);
+
+        return response()->json(['template' => DB::table('sms_templates')->where('id', $template->id)->first()]);
+    }
+
+    public function smsMessages(Request $request): JsonResponse
+    {
+        $rows = DB::table('sms_messages')->leftJoin('bookings', 'bookings.id', '=', 'sms_messages.booking_id')->leftJoin('customers', 'customers.id', '=', 'bookings.customer_id')->latest('sms_messages.created_at')->limit(100)->get(['sms_messages.id', 'sms_messages.kind', 'sms_messages.status', 'sms_messages.recipient_masked', 'sms_messages.scheduled_at', 'sms_messages.sent_at', 'sms_messages.delivered_at', 'sms_messages.error_message', 'customers.display_name as customer']);
+
+        return response()->json(['messages' => $rows]);
+    }
+
     private function bookingInput(Request $request): array|JsonResponse
     {
-        $validator = Validator::make($request->all(), ['customer' => ['required', 'string', 'max:160'], 'customerType' => ['required', 'in:private,business'], 'plate' => ['required', 'string', 'max:12'], 'vehicle' => ['nullable', 'string', 'max:200'], 'date' => ['required', 'date_format:Y-m-d'], 'time' => ['required', 'date_format:H:i'], 'inspection' => ['required', 'string', 'max:80'], 'status' => ['nullable', 'string', 'max:32']]);
+        $validator = Validator::make($request->all(), ['customer' => ['required', 'string', 'max:160'], 'customerType' => ['required', 'in:private,business'], 'phone' => ['nullable', 'string', 'max:32'], 'plate' => ['required', 'string', 'max:12'], 'vehicle' => ['nullable', 'string', 'max:200'], 'date' => ['required', 'date_format:Y-m-d'], 'time' => ['required', 'date_format:H:i'], 'inspection' => ['required', 'string', 'max:80'], 'status' => ['nullable', 'string', 'max:32']]);
 
         return $validator->fails() ? response()->json(['error' => 'Kunde, dato, tid og registreringsnummer skal udfyldes', 'errors' => $validator->errors()], 422) : $validator->validated();
+    }
+
+    private function queueSms(int $bookingId, string $kind, int $customerId, ?string $phone, CarbonImmutable $startsAt, string $registration): void
+    {
+        $settings = DB::table('sms_settings')->where('id', 1)->first();
+        $templateCode = 'PRIVATE_BOOKING_'.strtoupper($kind);
+        $template = DB::table('sms_templates')->where('code', $templateCode)->first();
+        $normalized = $this->normalizePhone($phone);
+        $body = $template?->body;
+        if ($body) {
+            $body = strtr($body, ['{{date}}' => $startsAt->format('d.m.Y'), '{{time}}' => $startsAt->format('H:i'), '{{registration}}' => $this->formatPlate($registration), '{{customerName}}' => (string) DB::table('customers')->where('id', $customerId)->value('display_name')]);
+        }
+        $scheduled = $kind === 'reminder' ? $startsAt->subDay() : now();
+        DB::table('sms_messages')->insertOrIgnore(['booking_id' => $bookingId, 'kind' => $kind, 'template_code' => $templateCode, 'recipient_hash' => $normalized ? hash('sha256', $normalized) : null, 'recipient_masked' => $this->maskPhone($normalized), 'sender_id' => $settings?->sender_id ?? 'MB Bilsyn', 'body' => $body, 'status' => 'held', 'idempotency_key' => 'booking:'.$bookingId.':'.$kind, 'attempts' => 0, 'retry_count' => 0, 'segment_count' => $this->smsSegments($body ?? ''), 'available_at' => $scheduled, 'scheduled_at' => $scheduled, 'created_at' => now(), 'updated_at' => now()]);
+    }
+
+    private function normalizePhone(?string $phone): ?string
+    {
+        $value = preg_replace('/[^0-9+]/', '', (string) $phone);
+        if ($value === '') {
+            return null;
+        }
+        if (str_starts_with($value, '00')) {
+            $value = '+'.substr($value, 2);
+        }
+        if (! str_starts_with($value, '+') && strlen($value) === 8) {
+            $value = '+45'.$value;
+        }
+
+        return preg_match('/^\+[1-9][0-9]{7,14}$/', $value) ? $value : null;
+    }
+
+    private function maskPhone(?string $phone): ?string
+    {
+        return $phone ? substr($phone, 0, 4).' ··· '.substr($phone, -2) : null;
+    }
+
+    private function smsSegments(string $body): int
+    {
+        if ($body === '') {
+            return 1;
+        }
+        $limit = preg_match('/[^\x00-\x7F]/', $body) ? 70 : 160;
+        $partLimit = strlen($body) > $limit ? ($limit - (preg_match('/[^\x00-\x7F]/', $body) ? 3 : 7)) : $limit;
+
+        return max(1, (int) ceil(strlen($body) / $partLimit));
     }
 
     private function audit(string $action, string $entityType, int|string $entityId, ?array $before, ?array $after): void

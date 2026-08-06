@@ -46,6 +46,11 @@ Route::middleware(['web', 'api.token', 'throttle:120,1'])->group(function () {
     Route::get('/imports', [OperationsController::class, 'imports']);
     Route::post('/imports/validate', [OperationsController::class, 'validateImport'])->middleware('permission:imports.write');
     Route::get('/sms/queue', [OperationsController::class, 'smsQueue']);
+    Route::get('/sms/settings', [OperationsController::class, 'smsSettings']);
+    Route::patch('/sms/settings', [OperationsController::class, 'updateSmsSettings'])->middleware('permission:settings.write');
+    Route::get('/sms/templates', [OperationsController::class, 'smsTemplates']);
+    Route::patch('/sms/templates/{code}', [OperationsController::class, 'updateSmsTemplate'])->middleware('permission:settings.write');
+    Route::get('/sms/messages', [OperationsController::class, 'smsMessages']);
     Route::get('/ai/bootstrap', [AiAssistantController::class, 'bootstrap'])->middleware('permission:ai.use');
     Route::post('/ai/conversations', [AiAssistantController::class, 'createConversation'])->middleware('permission:ai.use');
     Route::get('/ai/conversations/{conversation}', [AiAssistantController::class, 'showConversation'])->middleware('permission:ai.use');
