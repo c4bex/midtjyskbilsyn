@@ -1,20 +1,28 @@
 <?php
 
-use App\Http\Controllers\OperationsController;
 use App\Http\Controllers\AiAssistantController;
+use App\Http\Controllers\OperationsController;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('web')->group(function () {
     Route::post('/login', function () {
         $credentials = request()->validate(['email' => ['required', 'email'], 'password' => ['required', 'string']]);
-        if (!Auth::attempt($credentials)) return response()->json(['error' => 'Forkert e-mail eller adgangskode'], 401);
+        if (! Auth::attempt($credentials)) {
+            return response()->json(['error' => 'Forkert e-mail eller adgangskode'], 401);
+        }
         request()->session()->regenerate();
+
         return response()->json(['user' => Auth::user()->only(['id', 'name', 'email'])]);
     })->middleware('throttle:5,1');
     Route::get('/session', fn () => response()->json(['authenticated' => Auth::check(), 'user' => Auth::user()?->only(['id', 'name', 'email'])]));
-    Route::post('/logout', function () { Auth::logout(); request()->session()->invalidate(); request()->session()->regenerateToken(); return response()->json(['ok' => true]); });
+    Route::post('/logout', function () {
+        Auth::logout();
+        request()->session()->invalidate();
+        request()->session()->regenerateToken();
+
+        return response()->json(['ok' => true]);
+    });
 });
 
 Route::middleware(['web', 'api.token', 'throttle:120,1'])->group(function () {
@@ -22,7 +30,7 @@ Route::middleware(['web', 'api.token', 'throttle:120,1'])->group(function () {
     Route::get('/bookings', [OperationsController::class, 'bookings']);
     Route::post('/bookings', [OperationsController::class, 'createBooking'])->middleware('permission:bookings.write');
     Route::patch('/bookings/{booking}', [OperationsController::class, 'updateBooking'])->middleware('permission:bookings.write');
-    Route::delete('/bookings/{booking}', fn (int $booking) => DB::table('bookings')->where('id', $booking)->update(['status' => 'cancelled', 'updated_at' => now()]) ? response()->json(['ok' => true]) : response()->json(['error' => 'Bookingen findes ikke'], 404))->middleware('permission:bookings.write');
+    Route::delete('/bookings/{booking}', [OperationsController::class, 'deleteBooking'])->middleware('permission:bookings.write');
     Route::get('/customers', [OperationsController::class, 'customers']);
     Route::patch('/customers/{customer}/billing', [OperationsController::class, 'updateCustomerBilling'])->middleware('permission:customers.write');
     Route::get('/vehicles/lookup', [OperationsController::class, 'vehicleLookup']);

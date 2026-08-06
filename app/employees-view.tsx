@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, Check, Clock3, ShieldCheck, UserRound, UsersRound } from "lucide-react";
+import { CalendarDays, Clock3, ShieldCheck, UserRound, UsersRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 type Employee = { id: string; name: string; role: string; active: boolean; bookingCapacity: boolean; initials: string };

@@ -27,6 +27,7 @@ export function AiAssistant({ open, onClose, booking }: { open: boolean; onClose
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const loadBootstrap = async () => {
+    setError("");
     const response = await fetch("/api/ai/bootstrap", { cache: "no-store" });
     if (!response.ok) throw new Error("AI-assistenten kunne ikke indlæses");
     setBootstrap(await response.json());
@@ -34,7 +35,8 @@ export function AiAssistant({ open, onClose, booking }: { open: boolean; onClose
 
   useEffect(() => {
     if (!open) return;
-    setError("");
+    // Loading the assistant is an external synchronization; errors arrive asynchronously.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadBootstrap().catch((value) => setError(value instanceof Error ? value.message : "Assistenten kunne ikke åbnes"));
   }, [open]);
   useEffect(() => {

@@ -22,8 +22,6 @@ export function CustomersView({ onNotify }: { onNotify: (message: string) => voi
   const [loading, setLoading] = useState(true);
   const [billing, setBilling] = useState<BillingProfile>({ billing_method: "email", payment_terms: "netto_14" });
 
-  useEffect(() => { setBilling({ billing_method: "email", payment_terms: "netto_14", ...(selected?.billing ?? {}) }); }, [selected]);
-
   useEffect(() => {
     let active = true;
     fetch("/api/customers", { cache: "no-store" })
@@ -47,6 +45,10 @@ export function CustomersView({ onNotify }: { onNotify: (message: string) => voi
     setCustomers((current) => current.map((customer) => customer.id === selected.id ? { ...customer, billing } : customer));
     setSelected((current) => current ? { ...current, billing } : current);
     onNotify("Kundens faktureringsopsætning er gemt");
+  };
+  const selectCustomer = (customer: Customer) => {
+    setSelected(customer);
+    setBilling({ billing_method: "email", payment_terms: "netto_14", ...(customer.billing ?? {}) });
   };
 
   return (
@@ -79,7 +81,7 @@ export function CustomersView({ onNotify }: { onNotify: (message: string) => voi
             const vehicle = customer.vehicles[0];
             const latest = customer.history[0];
             return (
-              <button key={customer.id} className="customer-row" onClick={() => setSelected(customer)}>
+              <button key={customer.id} className="customer-row" onClick={() => selectCustomer(customer)}>
                 <span className="customer-name"><i className={customer.customerType}>{customer.customerType === "business" ? <Building2 size={15} /> : <UserRound size={15} />}</i><span><strong>{customer.name}</strong><small>{customer.customerType === "business" ? "Erhverv" : "Privat"}</small></span></span>
                 <span className="customer-vehicle"><strong>{vehicle?.plate ?? "—"}</strong><small>{vehicle?.vehicle ?? "Intet køretøj"}</small></span>
                 <span className="latest-visit">{latest ? <><strong>{danishDate(latest.date)}</strong><small>{latest.inspection}</small></> : "—"}</span>

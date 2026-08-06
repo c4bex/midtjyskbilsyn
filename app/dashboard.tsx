@@ -41,6 +41,7 @@ type Booking = {
   time: string;
   customer: string;
   customerType: CustomerType;
+  phone?: string | null;
   plate: string;
   vehicle: string;
   inspection: string;
@@ -81,6 +82,7 @@ const initialBookings: Booking[] = [
 ];
 
 const dayNames = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag", "Søndag"];
+const currentDate = new Date().toISOString().slice(0, 10);
 const isoWeek = (date: string) => { const value = new Date(`${date}T12:00:00Z`); const day = value.getUTCDay() || 7; value.setUTCDate(value.getUTCDate() + 4 - day); const start = new Date(Date.UTC(value.getUTCFullYear(), 0, 1)); return Math.ceil((((value.getTime() - start.getTime()) / 86400000) + 1) / 7); };
 const addDays = (date: string, amount: number) => { const value = new Date(`${date}T12:00:00Z`); value.setUTCDate(value.getUTCDate() + amount); return value.toISOString().slice(0, 10); };
 const dayNumber = (date: string) => Number(date.slice(-2));
@@ -109,7 +111,7 @@ const statusText: Record<BookingStatus, string> = {
   completed: "Færdig",
 };
 
-const emptyForm = { date: "2026-08-04", time: "11:20", customer: "", customerType: "private" as CustomerType, plate: "", vehicle: "", inspection: "Periodisk syn" };
+const emptyForm = { date: currentDate, time: "11:20", customer: "", customerType: "private" as CustomerType, plate: "", vehicle: "", inspection: "Periodisk syn" };
 
 export function Dashboard() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -132,11 +134,11 @@ export function Dashboard() {
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [smsTemplate, setSmsTemplate] = useState<SmsTemplate>("booking_confirmation");
   const [smsPhone, setSmsPhone] = useState("");
-  const [weekStart, setWeekStart] = useState("2026-08-03");
-  const [selectedDate, setSelectedDate] = useState("2026-08-04");
-  const [weekNumber, setWeekNumber] = useState(32);
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(currentDate));
+  const [selectedDate, setSelectedDate] = useState(currentDate);
+  const [weekNumber, setWeekNumber] = useState(() => isoWeek(currentDate));
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
-  const [calendarMonth, setCalendarMonth] = useState("2026-08");
+  const [calendarMonth, setCalendarMonth] = useState(currentDate.slice(0, 7));
   const [weekDays, setWeekDays] = useState<WeekDay[]>([
     { date: "2026-08-03", weekday: 1, closed: false, totalSlots: 23, bookedSlots: 0, availableSlots: [] },
     { date: "2026-08-04", weekday: 2, closed: false, totalSlots: 23, bookedSlots: 21, availableSlots: ["11:20", "14:20"] },
@@ -328,7 +330,7 @@ export function Dashboard() {
     setBusinessQuery(booking.customerType === "business" ? booking.customer : "");
     setVehicleLookup(null);
     setSmsTemplate("booking_confirmation");
-    setSmsPhone("");
+    setSmsPhone(booking.phone ?? "");
     setModalOpen(true);
   };
 

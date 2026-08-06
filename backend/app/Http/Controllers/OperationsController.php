@@ -32,11 +32,11 @@ class OperationsController extends Controller
         }
         $rows = DB::table('bookings')->leftJoin('customers', 'customers.id', '=', 'bookings.customer_id')->join('vehicles', 'vehicles.id', '=', 'bookings.vehicle_id')
             ->whereDate('bookings.starts_at', $date)->where('bookings.status', '!=', 'cancelled')->orderBy('bookings.starts_at')
-            ->get(['bookings.id', 'bookings.starts_at', 'bookings.slot_count', 'bookings.inspection_type', 'bookings.status', 'customers.display_name', 'customers.customer_type', 'vehicles.registration_normalized', 'vehicles.make', 'vehicles.model']);
+            ->get(['bookings.id', 'bookings.starts_at', 'bookings.slot_count', 'bookings.inspection_type', 'bookings.status', 'customers.display_name', 'customers.customer_type', 'customers.phone', 'vehicles.registration_normalized', 'vehicles.make', 'vehicles.model']);
         $bookings = $rows->map(fn ($row) => [
             'id' => (string) $row->id, 'date' => $date, 'time' => CarbonImmutable::parse($row->starts_at)->format('H:i'), 'slotCount' => (int) ($row->slot_count ?? 1),
             'customer' => $row->display_name ?? 'Ukendt kunde', 'customerType' => $row->customer_type ?? 'private',
-            'plate' => $this->formatPlate($row->registration_normalized), 'vehicle' => trim(($row->make ?? '').' '.($row->model ?? '')),
+            'plate' => $this->formatPlate($row->registration_normalized), 'phone' => $row->phone, 'vehicle' => trim(($row->make ?? '').' '.($row->model ?? '')),
             'inspection' => $row->inspection_type, 'status' => $row->status,
         ]);
         $availability = $this->availabilityForDate($date, $request->string('inspection')->toString() ?: null);
@@ -136,6 +136,21 @@ class OperationsController extends Controller
         if ($result instanceof JsonResponse) {
             return $result;
         }
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function deleteBooking(int $booking): JsonResponse
+    {
+        $current = DB::table('bookings')->where('id', $booking)->first();
+        if (! $current) {
+            return response()->json(['error' => 'Bookingen findes ikke'], 404);
+        }
+        DB::transaction(function () use ($booking, $current) {
+            DB::table('bookings')->where('id', $booking)->update(['status' => 'cancelled', 'updated_at' => now()]);
+            DB::table('sms_messages')->where('booking_id', $booking)->whereIn('status', ['held', 'DRAFT', 'SCHEDULED', 'QUEUED'])->update(['status' => 'CANCELLED', 'cancelled_at' => now(), 'updated_at' => now()]);
+            $this->audit('booking.cancelled', 'booking', $booking, (array) $current, ['status' => 'cancelled']);
+        });
 
         return response()->json(['ok' => true]);
     }
