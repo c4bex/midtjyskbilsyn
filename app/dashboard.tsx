@@ -82,6 +82,21 @@ const isoWeek = (date: string) => { const value = new Date(`${date}T12:00:00Z`);
 const addDays = (date: string, amount: number) => { const value = new Date(`${date}T12:00:00Z`); value.setUTCDate(value.getUTCDate() + amount); return value.toISOString().slice(0, 10); };
 const dayNumber = (date: string) => Number(date.slice(-2));
 const monthName = (date: string) => new Intl.DateTimeFormat("da-DK", { month: "short", timeZone: "Europe/Copenhagen" }).format(new Date(`${date}T12:00:00Z`)).replace(".", "");
+const monthTitle = (date: string) => {
+  const title = new Intl.DateTimeFormat("da-DK", { month: "long", year: "numeric", timeZone: "Europe/Copenhagen" }).format(new Date(`${date}T12:00:00Z`));
+  return title.charAt(0).toUpperCase() + title.slice(1);
+};
+const startOfWeek = (date: string) => {
+  const value = new Date(`${date}T12:00:00Z`);
+  const offset = (value.getUTCDay() + 6) % 7;
+  value.setUTCDate(value.getUTCDate() - offset);
+  return value.toISOString().slice(0, 10);
+};
+const monthGrid = (month: string) => {
+  const first = `${month}-01`;
+  const gridStart = startOfWeek(first);
+  return Array.from({ length: 42 }, (_, index) => addDays(gridStart, index));
+};
 const formatDanishDate = (date: string | null | undefined) => date ? new Intl.DateTimeFormat("da-DK", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Copenhagen" }).format(new Date(date)) : "Ikke oplyst";
 
 const statusText: Record<BookingStatus, string> = {
@@ -116,6 +131,8 @@ export function Dashboard() {
   const [weekStart, setWeekStart] = useState("2026-08-03");
   const [selectedDate, setSelectedDate] = useState("2026-08-04");
   const [weekNumber, setWeekNumber] = useState(32);
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState("2026-08");
   const [weekDays, setWeekDays] = useState<WeekDay[]>([
     { date: "2026-08-03", weekday: 1, closed: false, totalSlots: 23, bookedSlots: 0, availableSlots: [] },
     { date: "2026-08-04", weekday: 2, closed: false, totalSlots: 23, bookedSlots: 21, availableSlots: ["11:20", "14:20"] },
@@ -188,13 +205,16 @@ export function Dashboard() {
   }, [flash, weekStart]);
 
   useEffect(() => {
-    if (!modalOpen) return;
+    if (!modalOpen && !monthPickerOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setModalOpen(false);
+      if (event.key === "Escape") {
+        setModalOpen(false);
+        setMonthPickerOpen(false);
+      }
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [modalOpen]);
+  }, [modalOpen, monthPickerOpen]);
 
   const changeWeek = (days: number) => {
     setWeekLoading(true);
@@ -255,6 +275,20 @@ export function Dashboard() {
   const selectDay = (day: WeekDay) => {
     if (day.closed) return flash(`${dayNames[day.weekday - 1]} er lukket`);
     setSelectedDate(day.date);
+  };
+
+  const selectCalendarDate = (date: string) => {
+    setWeekLoading(true);
+    setSelectedDate(date);
+    setWeekStart(startOfWeek(date));
+    setCalendarMonth(date.slice(0, 7));
+    setMonthPickerOpen(false);
+  };
+
+  const changeCalendarMonth = (amount: number) => {
+    const value = new Date(`${calendarMonth}-01T12:00:00Z`);
+    value.setUTCMonth(value.getUTCMonth() + amount);
+    setCalendarMonth(value.toISOString().slice(0, 7));
   };
 
   const openEdit = (booking: Booking) => {
@@ -351,7 +385,7 @@ export function Dashboard() {
           {activeView === "customers" ? <CustomersView onNotify={flash} /> : activeView === "availability" ? <AvailabilityView onNotify={flash} /> : activeView === "sms" ? <SmsSettingsView onNotify={flash} /> : activeView === "invoices" ? <InvoiceView onNotify={flash} /> : activeView === "employees" ? <EmployeesView onNotify={flash} /> : activeView === "drift" ? <DriftView /> : <>
           <section className="page-heading">
             <div>
-              <p className="eyebrow">{dayNames[new Date(`${selectedDate}T12:00:00Z`).getUTCDay() === 0 ? 6 : new Date(`${selectedDate}T12:00:00Z`).getUTCDay() - 1]} · {dayNumber(selectedDate)}. {monthName(selectedDate)} 2026</p>
+              <p className="eyebrow">{dayNames[new Date(`${selectedDate}T12:00:00Z`).getUTCDay() === 0 ? 6 : new Date(`${selectedDate}T12:00:00Z`).getUTCDay() - 1]} · {dayNumber(selectedDate)}. {monthName(selectedDate)} {selectedDate.slice(0, 4)}</p>
               <h1>Dagens bookinger</h1>
               <p>Hurtigt overblik over hvem og hvad der kommer i dag.</p>
             </div>
@@ -361,7 +395,20 @@ export function Dashboard() {
           <section className="week-capacity" aria-label={`Kapacitet for uge ${weekNumber}`}>
             <div className="week-capacity-head">
               <div className="week-identity"><span>UGE</span><strong>{weekNumber}</strong></div>
-              <div><h2>Ledige tider denne uge</h2><p>{dayNumber(weekStart)}. {monthName(weekStart)} – {dayNumber(addDays(weekStart, 6))}. {monthName(addDays(weekStart, 6))}</p></div>
+              <div className="week-copy"><h2>Ledige tider denne uge</h2><p>{dayNumber(weekStart)}. {monthName(weekStart)} – {dayNumber(addDays(weekStart, 6))}. {monthName(addDays(weekStart, 6))}</p></div>
+              <div className="month-picker-wrap">
+                <button className="month-picker-trigger" aria-expanded={monthPickerOpen} aria-haspopup="dialog" onClick={() => { setCalendarMonth(selectedDate.slice(0, 7)); setMonthPickerOpen((open) => !open); }}>
+                  <CalendarDays size={17} /><span><strong>{monthTitle(selectedDate)}</strong><small>Vælg dato</small></span><ChevronDown size={15} />
+                </button>
+                {monthPickerOpen && <div className="month-picker" role="dialog" aria-label="Vælg dato">
+                  <div className="month-picker-head"><button aria-label="Forrige måned" onClick={() => changeCalendarMonth(-1)}><ChevronLeft size={18} /></button><strong>{monthTitle(`${calendarMonth}-01`)}</strong><button aria-label="Næste måned" onClick={() => changeCalendarMonth(1)}><ChevronRight size={18} /></button></div>
+                  <div className="month-picker-weekdays"><span>Uge</span>{["Ma", "Ti", "On", "To", "Fr", "Lø", "Sø"].map((day) => <span key={day}>{day}</span>)}</div>
+                  <div className="month-picker-days">
+                    {monthGrid(calendarMonth).map((date, index) => <div className="month-picker-cell" key={date}>{index % 7 === 0 && <span className="month-week-number">{isoWeek(date)}</span>}<button className={`${date.slice(0, 7) !== calendarMonth ? "outside" : ""} ${date === selectedDate ? "selected" : ""}`} onClick={() => selectCalendarDate(date)} aria-label={formatDanishDate(date)}>{dayNumber(date)}</button></div>)}
+                  </div>
+                  <button className="month-picker-today" onClick={() => selectCalendarDate("2026-08-04")}>Gå til i dag</button>
+                </div>}
+              </div>
               <div className="week-navigation"><button aria-label="Forrige uge" onClick={() => changeWeek(-7)}><ChevronLeft size={18} /></button><button onClick={() => { setWeekLoading(true); setWeekStart("2026-08-03"); }}>Denne uge</button><button aria-label="Næste uge" onClick={() => changeWeek(7)}><ChevronRight size={18} /></button></div>
             </div>
             <div className={`capacity-days ${weekLoading ? "loading" : ""}`}>

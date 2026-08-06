@@ -325,12 +325,31 @@ main { grid-column: 2; min-width: 0; }
   box-shadow: 0 8px 24px rgba(27,45,65,.045);
 }
 .live-design .week-capacity-head { min-height: 66px; padding: 10px 14px; }
+.live-design .week-capacity { overflow: visible; }
 .live-design .week-identity { width: 60px; height: 48px; flex-basis: 60px; border-radius: 10px; }
 .live-design .week-identity span { font-size: 8px; }
 .live-design .week-identity strong { font-size: 23px; }
 .live-design .week-capacity-head h2 { font-size: 15px; }
 .live-design .week-capacity-head p { font-size: 10px; }
 .live-design .week-navigation button { min-width: 34px; height: 34px; font-size: 10px; }
+.month-picker-wrap { position: relative; margin-left: auto; }
+.month-picker-trigger { min-width: 166px; height: 42px !important; padding: 0 10px !important; display: flex !important; grid-template-columns: none !important; align-items: center; justify-content: flex-start; gap: 8px; border-color: #d9e0e6 !important; text-align: left; }
+.month-picker-trigger > span { min-width: 0; display: grid; flex: 1; gap: 1px; }
+.month-picker-trigger strong { overflow: hidden; color: #26384d; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.month-picker-trigger small { color: #748191; font-size: 9px; }
+.month-picker { position: absolute; z-index: 60; top: calc(100% + 8px); right: 0; width: 360px; padding: 14px; border: 1px solid #d8e0e7; border-radius: 14px; background: #fff; box-shadow: 0 18px 50px rgba(18,35,54,.2); }
+.month-picker-head { min-height: 38px; display: grid; grid-template-columns: 36px 1fr 36px; align-items: center; gap: 6px; }
+.month-picker-head strong { color: #1e3045; font-size: 14px; text-align: center; }
+.month-picker-head button { width: 34px; height: 34px; padding: 0; display: grid; place-items: center; border: 1px solid #e0e5ea; border-radius: 8px; background: #fff; cursor: pointer; }
+.month-picker-weekdays, .month-picker-days { display: grid; grid-template-columns: 30px repeat(7,1fr); gap: 4px; }
+.month-picker-weekdays { margin: 8px 0 4px; color: #758292; font-size: 9px; font-weight: 750; text-align: center; }
+.month-picker-cell { display: contents; }
+.month-week-number { display: grid; place-items: center; color: #9aa4af; font-size: 9px; font-weight: 700; }
+.month-picker-days button { width: 100%; aspect-ratio: 1; padding: 0; display: grid; place-items: center; border: 0; border-radius: 9px; color: #35475a; background: transparent; font-size: 11px; font-weight: 650; cursor: pointer; }
+.month-picker-days button:hover { color: #1d5b48; background: #edf8f3; }
+.month-picker-days button.outside { color: #b2bac2; }
+.month-picker-days button.selected { color: #171717; background: var(--mb-yellow); box-shadow: 0 3px 9px rgba(212,171,0,.2); }
+.month-picker-today { width: 100%; min-height: 35px; margin-top: 10px; border: 1px solid #dce3e8; border-radius: 8px; color: #40566d; background: #f8fafb; font-size: 10px; font-weight: 700; cursor: pointer; }
 .live-design .capacity-days { padding: 11px; gap: 8px; }
 .live-design .capacity-days > button { min-height: 108px; padding: 11px; border-radius: 11px; }
 .live-design .capacity-day-name { font-size: 10px; }
@@ -391,6 +410,66 @@ main { grid-column: 2; min-width: 0; }
 .live-design .booking-slots button { height: 40px; border-radius: 9px; font-size: 11px; }
 .live-design .smart-booking-modal .modal-actions { padding: 14px 24px; }
 
+/* Læsevenlig driftstypografi: en lille, konsekvent forøgelse uden at gøre
+   bookingoverblikket tungt eller fjerne den kompakte arbejdsgang. */
+.live-design { font-size: 15px; }
+.live-navigation > button { font-size: 12px; }
+.live-location, .live-profile b { font-size: 12px; }
+.live-design .heading-stats { color: #657282; font-size: 11px; }
+.live-design .week-identity span { font-size: 9px; }
+.live-design .week-capacity-head p,
+.live-design .capacity-day-name,
+.live-design .capacity-status,
+.live-design .week-capacity-foot { color: #5f6d7b; font-size: 11px; }
+.live-design .capacity-day-name em { font-size: 9px; }
+.live-design .capacity-days > button > small { color: #6f7b87; font-size: 10px; }
+.live-design .list-toolbar > div > span,
+.live-design .aside-title p { color: #667484; font-size: 11px; }
+.live-design .customer-filters button { font-size: 11px; }
+.live-design .table-head { color: #6d7987; font-size: 10px; }
+.live-design .row-customer strong,
+.live-design .row-vehicle strong { font-size: 12px; }
+.live-design .row-customer small,
+.live-design .row-vehicle small { color: #687687; font-size: 10px; }
+.live-design .row-inspection { color: #4f5f6e; font-size: 11px; }
+.live-design .status { font-size: 10px; }
+.live-design .step-title strong { font-size: 14px; }
+.live-design .step-title span,
+.live-design .type-choice small { color: #687687; font-size: 11px; }
+.live-design .type-choice strong { font-size: 13px; }
+.live-design .smart-field { color: #4d5e6e; font-size: 11px; }
+.live-design .smart-field > input,
+.live-design .smart-field > select,
+.live-design .field-with-icon input,
+.live-design .field-with-button input { font-size: 13px; }
+.live-design .lookup-card strong,
+.live-design .slot-heading { font-size: 11px; }
+.live-design .lookup-card small,
+.live-design .lookup-card em,
+.live-design .slot-heading small { color: #687687; font-size: 10px; }
+.live-design .booking-slots button { font-size: 12px; }
+.live-design .module-summary span,
+.live-design .module-search input,
+.live-design .customer-name small,
+.live-design .customer-vehicle small,
+.live-design .latest-visit small,
+.live-design .history-list small,
+.live-design .hours-heading p,
+.live-design .saved-note,
+.live-design .closure-form label,
+.live-design .existing-closures small { color: #657382; font-size: 10px; }
+.live-design .customer-table-head,
+.live-design .hours-table-head { color: #687585; font-size: 9px; }
+.live-design .customer-name strong,
+.live-design .customer-vehicle strong,
+.live-design .latest-visit strong,
+.live-design .hours-row > strong,
+.live-design .history-list strong,
+.live-design .existing-closures strong { font-size: 11px; }
+.live-design .hours-row input[type="time"],
+.live-design .closure-form input,
+.live-design .closure-form select { font-size: 10px; }
+
 @media (min-width: 1101px) {
   .live-design .workspace { grid-template-columns: minmax(0,1fr) 310px; column-gap: 16px; }
   .live-design .workspace > .day-layout > .day-aside {
@@ -417,6 +496,8 @@ main { grid-column: 2; min-width: 0; }
   .live-brand-art { height: 46px; background-size: 138px auto; }
   .live-mobile-nav .live-brand-art { width: 176px; height: 50px; background-size: 176px auto; }
   .live-design .page-heading h1 { font-size: 30px; }
+  .month-picker { position: fixed; top: 76px; right: 12px; left: 12px; width: auto; }
+  .month-picker-trigger { min-width: 142px; }
 }
 
 @media (max-width: 520px) {
@@ -425,6 +506,9 @@ main { grid-column: 2; min-width: 0; }
   .live-design .heading-actions .primary-button { width: 100%; }
   .live-design .available-times { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .live-design .capacity-days { grid-template-columns: repeat(7,105px); }
+  .live-design .week-copy { display: none; }
+  .month-picker-wrap { margin-left: 0; }
+  .month-picker-trigger { min-width: 132px; }
   .live-design .smart-booking-modal .booking-steps { padding: 10px; }
   .live-design .booking-step { padding: 14px; }
 }
