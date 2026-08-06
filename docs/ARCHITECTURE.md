@@ -2,9 +2,9 @@
 
 ## Beslutning
 
-Systemet er et selvstændigt TypeScript-projekt med React/Next-kompatibel brugerflade via vinext, Cloudflare Worker-kompatibel serverkode, SQLite/D1 og Drizzle til data. Det giver én kodebase, hurtig lokal udvikling og en enkel vej til senere serverdrift. Projektet har eget Git-repository og anvender ingen filer, database eller port fra ARVO.
+Systemet er et selvstændigt projekt med React/TypeScript-brugerflade via vinext, Laravel 12 API og MySQL 8.4. MySQL er den eneste driftsdatabase; SQLite bruges kun isoleret af automatiske Laravel-tests. Projektet har eget Git-repository og anvender ingen filer, database eller port fra ARVO.
 
-Bookingdelen har nu sin egen D1-binding (`DB`) og et kontrolleret, fiktivt startdatasæt. Opret, redigér og aflys gemmes persistent lokalt og skriver audit-hændelser med aktør-id. Lokal udvikling tillades kun på loopback; en senere hostet API kræver platformens autentificerede brugerheaders og sitet skal samtidig have en privat workspace-adgangspolitik. Der foretages fortsat ingen eksterne kald.
+Booking, kunder, køretøjer, åbningstider, medarbejdere, fakturakladder, SMS-kø og audit gemmes gennem Laravel i MySQL. Alle browserkald går gennem den offentlige webcontainer; Laravel og MySQL ligger på et internt Docker-netværk. NAS-testmiljøet eksponeres kun gennem Tailscale og har sessionslogin, rollebaserede rettigheder og begrænsning af login/API-kald.
 
 SMS forberedes som en separat GatewayAPI-adapter med faste skabeloner til bekræftelse, påmindelse, ændring og aflysning. Adapteren validerer telefonnummer, afsender, tekstlængde, idempotensnøgle og korrelations-id, men er deaktiveret indtil GatewayAPI-konto, afsender-id, testdata og en aktiveringsplan er dokumenteret.
 
@@ -31,7 +31,7 @@ Alle udgående handlinger bliver først skrevet til `integration_jobs`. En unik 
 
 Synsprogram-, Dinero- og ARVO-adapterne er hard-disabled og kan ikke kalde eksterne systemer. Aktivering kræver versionsfast dokumentation, testmiljø/testdata, kontrakttest, hemmeligheder i en secret store og en godkendt rollback-plan. DMR er den eneste aktive read-only integration og går gennem en tokenbeskyttet NAS-bridge uden skriveadgang til kildedatabasen.
 
-Køretøjsopslaget søger først på normaliseret registreringsnummer i den lokale database og kan derfor udfylde mærke, model, kunde og seneste lokale syn uden eksterne kald. Et manglende lokalt resultat sendes til DMR-adapteren med fem sekunders timeout. Fejl vises som `DMR midlertidigt utilgængelig` og blokerer ikke manuel booking. En officiel næste synsdato vises kun, hvis kilden leverer den eksplicit.
+Køretøjsopslaget spørger den read-only DMR-adapter med fem sekunders timeout. Hvis bridgen er utilgængelig, kan systemet falde tilbage til et allerede kendt køretøj i MySQL. Fejl vises som `DMR midlertidigt utilgængelig` og blokerer ikke manuel booking. En officiel næste synsdato vises kun, hvis kilden leverer den eksplicit.
 
 ## Persondata og adgang
 
@@ -43,8 +43,8 @@ Det nuværende driftssystem er produktionskilden, indtil en særskilt overgang e
 
 ## Første datamodel
 
-`stations` ejer åbningstider og bookinger. `employees` knyttes til station og rolle. `customers` ejer normalt `vehicles`; en booking binder station, køretøj, eventuel kunde og medarbejder sammen. `availability_rules` dækker gentagne åbningstider og pauser samt datobaserede ferie-/lukkedage. `invoices` er 1:1 med booking. `integration_jobs` er kø, genforsøg og fejlkø. `audit_events` er den fælles revisionshistorik.
+`customers` ejer normalt `vehicles`; en `booking` binder kunde og køretøj til en tid. `availability_rules` dækker åbningstider, pauser samt ferie-/lukkedage. `employees`, `employee_work_rules` og `employee_absences` dækker adgang og arbejdstid. `invoice_drafts`, `sms_messages` og `audit_events` holder klargøring, idempotent beskedkø og revisionshistorik. En genereret, unik MySQL-kolonne beskytter aktive tider mod dobbeltbooking.
 
 ## Lokal afgrænsning
 
-Anbefalet lokal port er `4317` og skal konfigureres specifikt ved opstart. Projektet må ikke genbruge ARVO-miljøvariable, databasefiler, containernavne eller integrationsnøgler.
+Lokal frontend bruger port `4317`; det private NAS-testmiljø bruger port `4321`. Projektet må ikke genbruge ARVO-miljøvariable, databasefiler, containernavne eller integrationsnøgler.

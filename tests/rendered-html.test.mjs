@@ -33,20 +33,21 @@ test("den danske dagsoversigt indeholder bookingflowet", async () => {
 });
 
 test("ugeoversigten beregner kapacitet fra åbningstider og bookinger", async () => {
-  const route = await readFile(new URL("../app/api/calendar/week/route.ts", import.meta.url), "utf8");
-  assert.match(route, /availability_rules/);
-  assert.match(route, /status NOT IN \('cancelled', 'no_show'\)/);
-  assert.match(route, /availableSlots/);
-  assert.match(route, /isoWeek/);
+  const [route, controller] = await Promise.all([
+    readFile(new URL("../app/api/calendar/week/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../backend/app/Http/Controllers/OperationsController.php", import.meta.url), "utf8"),
+  ]);
+  assert.match(route, /proxyLaravel/);
+  assert.match(controller, /availability_rules/);
+  assert.match(controller, /whereNotIn\('status', \['cancelled', 'no_show'\]\)/);
+  assert.match(controller, /availableSlots/);
+  assert.match(controller, /isoWeek/);
 });
 
 test("datamodellen beskytter aktive tider mod dobbeltbooking", async () => {
-  const [schema, migration] = await Promise.all([
-    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
-    readFile(new URL("../drizzle/0001_motionless_sandman.sql", import.meta.url), "utf8"),
-  ]);
-  assert.match(schema, /uidx_bookings_station_starts_active/);
-  assert.match(migration, /CREATE UNIQUE INDEX [`"]uidx_bookings_station_starts_active[`"]/i);
+  const migration = await readFile(new URL("../backend/database/migrations/2026_08_06_000007_protect_active_booking_slots.php", import.meta.url), "utf8");
+  assert.match(migration, /uidx_bookings_starts_active/);
+  assert.match(migration, /CREATE UNIQUE INDEX/i);
   assert.match(migration, /NOT IN \('cancelled', 'no_show'\)/i);
 });
 
@@ -86,14 +87,16 @@ test("importvalidering finder dubletter uden at skrive data", async () => {
 });
 
 test("medarbejderdata har separat fraværstabel og API", async () => {
-  const [bootstrap, route] = await Promise.all([
-    readFile(new URL("../db/bootstrap.ts", import.meta.url), "utf8"),
+  const [migration, route, controller] = await Promise.all([
+    readFile(new URL("../backend/database/migrations/2026_08_06_000006_create_operations_tables.php", import.meta.url), "utf8"),
     readFile(new URL("../app/api/employees/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../backend/app/Http/Controllers/OperationsController.php", import.meta.url), "utf8"),
   ]);
-  assert.match(bootstrap, /CREATE TABLE IF NOT EXISTS employee_absences/);
-  assert.match(bootstrap, /CREATE TABLE IF NOT EXISTS employee_work_rules/);
-  assert.match(route, /employee_absences/);
-  assert.match(route, /dateFrom/);
+  assert.match(migration, /employee_absences/);
+  assert.match(migration, /employee_work_rules/);
+  assert.match(route, /proxyLaravel/);
+  assert.match(controller, /employee_absences/);
+  assert.match(controller, /dateFrom/);
 });
 
 test("integrationsadaptere er deaktiverede som standard", async () => {
@@ -111,11 +114,15 @@ test("integrationsadaptere er deaktiverede som standard", async () => {
 
 test("DMR-opslag normaliserer nummerplader og bruges som fallback efter MySQL", async () => {
   const { normalizeDmrRegistration } = await import("../lib/integrations/adapters/dmr.ts");
-  const route = await readFile(new URL("../app/api/vehicles/lookup/route.ts", import.meta.url), "utf8");
+  const [route, service, controller] = await Promise.all([
+    readFile(new URL("../app/api/vehicles/lookup/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../backend/app/Services/DmrLookupService.php", import.meta.url), "utf8"),
+    readFile(new URL("../backend/app/Http/Controllers/OperationsController.php", import.meta.url), "utf8"),
+  ]);
   assert.equal(normalizeDmrRegistration("en 48-111"), "EN48111");
   assert.equal(normalizeDmrRegistration("dv 50 040"), "DV50040");
-  assert.match(route, /async function lookupOnNas/);
-  assert.match(route, /if \(data\.found\)/);
-  assert.match(route, /const dmrResponse = await lookupOnNas\(registration\)/);
-  assert.match(route, /lastInspectionDate.*inspectionDate/);
+  assert.match(route, /proxyLaravel/);
+  assert.match(service, /withToken\(\$token\)/);
+  assert.match(service, /registration/);
+  assert.match(controller, /local-mysql/);
 });

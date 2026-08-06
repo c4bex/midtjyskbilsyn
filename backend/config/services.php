@@ -2,6 +2,13 @@
 
 return [
 
+    'dmr' => [
+        'base_url' => env('DMR_LOOKUP_BASE_URL'),
+        'token' => env('DMR_LOOKUP_TOKEN'),
+        'dataset' => env('DMR_LOOKUP_DATASET', 'full'),
+        'timeout' => (int) env('DMR_LOOKUP_TIMEOUT_SECONDS', 5),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services

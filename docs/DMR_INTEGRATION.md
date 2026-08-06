@@ -5,8 +5,8 @@ Booking-systemet har en aktiv, read-only DMR-adapter til den lokale NAS-bridge. 
 ## Opslagsrækkefølge
 
 1. Registreringsnummeret normaliseres til store bogstaver uden mellemrum og bindestreger.
-2. Systemet søger først i sin egen MySQL/D1-køretøjsdatabase.
-3. Hvis bilen ikke findes lokalt, kaldes NAS-bridgen med en timeout på fem sekunder.
+2. Laravel kalder NAS-bridgen med en timeout på fem sekunder.
+3. Hvis bridgen er utilgængelig, forsøges et fallback på et allerede kendt køretøj i MySQL.
 4. Fundne DMR-data udfylder køretøjet i bookingdialogen. Data gemmes ikke automatisk som kundedata.
 
 Brugerfladen skelner mellem `fundet`, `ikke fundet` og `midlertidigt utilgængelig`, så en netværksfejl aldrig vises som et sikkert negativt opslag.

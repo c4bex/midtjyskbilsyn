@@ -16,17 +16,22 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        User::firstOrCreate(['email' => 'test@example.com'], [
-            'name' => 'Test User',
-            'password' => bcrypt('password'),
-        ]);
+        $adminEmail = env('SEED_ADMIN_EMAIL');
+        $adminPassword = env('SEED_ADMIN_PASSWORD');
+        $admin = null;
+        if ($adminEmail && $adminPassword) {
+            $admin = User::updateOrCreate(['email' => $adminEmail], [
+                'name' => 'Rasmus Havn Mouritzen',
+                'password' => bcrypt($adminPassword),
+            ]);
+        }
 
         foreach ([
             ['Peter Hartz Jensen', 'Synsinspektør'],
             ['Rasmus Havn Mouritzen', 'Teknisk ansvarlig / Ejer'],
             ['Pernille Havn Mouritzen', 'Bogholder / blæksprut'],
         ] as [$name, $role]) {
-            DB::table('employees')->updateOrInsert(['display_name' => $name], ['role' => $role, 'active' => true, 'updated_at' => now(), 'created_at' => now()]);
+            DB::table('employees')->updateOrInsert(['display_name' => $name], ['user_id' => $name === 'Rasmus Havn Mouritzen' ? $admin?->id : null, 'role' => $role, 'active' => true, 'updated_at' => now(), 'created_at' => now()]);
         }
 
         $private = DB::table('customers')->updateOrInsert(
@@ -55,6 +60,36 @@ class DatabaseSeeder extends Seeder
             ['source_reference' => 'demo-booking-0820'],
             ['customer_id' => $privateId, 'vehicle_id' => $privateVehicle, 'starts_at' => '2026-08-04 08:20:00', 'ends_at' => '2026-08-04 08:40:00', 'inspection_type' => 'Periodisk syn', 'status' => 'confirmed', 'source' => 'demo', 'updated_at' => now(), 'created_at' => now()],
         );
+
+        foreach ([
+            [1, '08:00', '16:00'], [2, '08:00', '16:00'], [3, '08:00', '16:00'],
+            [4, '08:00', '16:00'], [5, '08:00', '15:40'],
+        ] as [$weekday, $start, $end]) {
+            DB::table('availability_rules')->updateOrInsert(
+                ['kind' => 'opening_hours', 'weekday' => $weekday],
+                ['starts_at' => $start, 'ends_at' => $end, 'label' => 'Normal åbningstid', 'created_at' => now(), 'updated_at' => now()],
+            );
+        }
+        foreach ([6, 7] as $weekday) {
+            DB::table('availability_rules')->updateOrInsert(
+                ['kind' => 'closed_day', 'weekday' => $weekday],
+                ['label' => 'Fast lukkedag', 'created_at' => now(), 'updated_at' => now()],
+            );
+        }
+        DB::table('availability_rules')->updateOrInsert(
+            ['kind' => 'break', 'weekday' => 1],
+            ['starts_at' => '12:20', 'ends_at' => '13:00', 'label' => 'Pause', 'created_at' => now(), 'updated_at' => now()],
+        );
+
+        foreach ([
+            ['demo-invoice-1', 'Autogården', 'Juli 2026', 'Syn · 1. Syn / P-syn · Reg. nr. EC20464 · SUZUKI BALENO', 'Klargøres'],
+            ['demo-invoice-2', 'Autohuset', 'Juli 2026', 'Syn · 1. Syn / P-syn · Reg. nr. EH67875 · OPEL Crossland X', 'Klar til Dinero'],
+        ] as [$reference, $customer, $period, $description, $status]) {
+            DB::table('invoice_drafts')->updateOrInsert(
+                ['source_reference' => $reference],
+                ['customer_name' => $customer, 'period' => $period, 'description' => $description, 'quantity' => 1, 'unit_price_ore' => 38000, 'status' => $status, 'created_at' => now(), 'updated_at' => now()],
+            );
+        }
         DB::table('bookings')->updateOrInsert(
             ['source_reference' => 'demo-booking-0800'],
             ['customer_id' => $businessId, 'vehicle_id' => $businessVehicle, 'starts_at' => '2026-08-04 08:00:00', 'ends_at' => '2026-08-04 08:20:00', 'inspection_type' => 'Periodisk syn', 'status' => 'completed', 'source' => 'demo', 'updated_at' => now(), 'created_at' => now()],

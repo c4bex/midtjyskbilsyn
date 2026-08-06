@@ -1,0 +1,13 @@
+.git
+.env*
+node_modules
+.vinext
+.wrangler
+backend/.env*
+backend/vendor
+backend/storage/logs/*
+deploy/nas/runtime
+deploy/nas/backups
+**/.DS_Store
+**/* 2.*
+**/* 3.*

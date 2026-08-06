@@ -1,0 +1,151 @@
+name: midtjysk-bilsyn-test
+
+x-api-environment: &api-environment
+  APP_ENV: production
+  APP_DEBUG: "false"
+  APP_URL: ${APP_URL}
+  APP_KEY: ${APP_KEY}
+  LOG_CHANNEL: stderr
+  DB_CONNECTION: mysql
+  DB_HOST: mysql
+  DB_PORT: 3306
+  DB_DATABASE: ${MYSQL_DATABASE}
+  DB_USERNAME: ${MYSQL_USER}
+  DB_PASSWORD: ${MYSQL_PASSWORD}
+  SESSION_DRIVER: database
+  SESSION_SECURE_COOKIE: "false"
+  SESSION_SAME_SITE: strict
+  CACHE_STORE: database
+  QUEUE_CONNECTION: database
+  BOOKING_API_TOKEN: ${BOOKING_API_TOKEN}
+  BOOKING_API_ROLE: "Teknisk ansvarlig / Ejer"
+  SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
+  SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+  DMR_LOOKUP_BASE_URL: ${DMR_LOOKUP_BASE_URL}
+  DMR_LOOKUP_TOKEN: ${DMR_LOOKUP_TOKEN}
+  DMR_LOOKUP_DATASET: full
+  DMR_LOOKUP_TIMEOUT_SECONDS: 5
+
+x-api-service: &api-service
+  image: midtjysk-bilsyn-api:${APP_IMAGE_TAG:-latest}
+  build:
+    context: ../../backend
+  restart: unless-stopped
+  environment: *api-environment
+  networks: [app]
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_danish_ci
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      TZ: Europe/Copenhagen
+    volumes:
+      - ${NAS_DATA_ROOT}/mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks: [app]
+
+  migrate:
+    <<: *api-service
+    restart: "no"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: ["sh", "-lc", "php artisan migrate --force && php artisan db:seed --force"]
+
+  api:
+    <<: *api-service
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/up"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  queue:
+    <<: *api-service
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["php", "artisan", "queue:work", "--sleep=3", "--tries=3", "--backoff=30", "--max-time=3600"]
+
+  scheduler:
+    <<: *api-service
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["php", "artisan", "schedule:work"]
+
+  web:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      LARAVEL_API_BASE_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [app]
+
+  proxy:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_started
+    ports:
+      - "${APP_PORT:-4321}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks: [app]
+
+  backup:
+    image: mysql:8.4
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_PWD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ${NAS_DATA_ROOT}/backups:/backups
+      - ./scripts/backup-loop.sh:/usr/local/bin/backup-loop.sh:ro
+    command: ["sh", "/usr/local/bin/backup-loop.sh"]
+    networks: [app]
+
+  restore-test:
+    image: mysql:8.4
+    profiles: [maintenance]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_PWD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+    volumes:
+      - ${NAS_DATA_ROOT}/backups:/backups:ro
+      - ./scripts/restore-test.sh:/usr/local/bin/restore-test.sh:ro
+    command: ["sh", "/usr/local/bin/restore-test.sh"]
+    networks: [app]
+
+networks:
+  app:
+    driver: bridge
