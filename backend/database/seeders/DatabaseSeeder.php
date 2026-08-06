@@ -31,7 +31,7 @@ class DatabaseSeeder extends Seeder
             ['Rasmus Havn Mouritzen', 'Teknisk ansvarlig / Ejer'],
             ['Pernille Havn Mouritzen', 'Bogholder / blæksprut'],
         ] as [$name, $role]) {
-            DB::table('employees')->updateOrInsert(['display_name' => $name], ['user_id' => $name === 'Rasmus Havn Mouritzen' ? $admin?->id : null, 'role' => $role, 'active' => true, 'updated_at' => now(), 'created_at' => now()]);
+            DB::table('employees')->updateOrInsert(['display_name' => $name], ['user_id' => $name === 'Rasmus Havn Mouritzen' ? $admin?->id : null, 'role' => $role, 'active' => true, 'booking_capacity' => in_array($role, ['Synsinspektør', 'Teknisk ansvarlig / Ejer'], true), 'updated_at' => now(), 'created_at' => now()]);
         }
 
         $private = DB::table('customers')->updateOrInsert(
@@ -80,6 +80,18 @@ class DatabaseSeeder extends Seeder
             ['kind' => 'break', 'weekday' => 1],
             ['starts_at' => '12:20', 'ends_at' => '13:00', 'label' => 'Pause', 'created_at' => now(), 'updated_at' => now()],
         );
+
+        $capacityEmployees = DB::table('employees')->where('booking_capacity', true)->pluck('id');
+        foreach ($capacityEmployees as $employeeId) {
+            foreach (range(1, 5) as $weekday) {
+                $opening = DB::table('availability_rules')->where('kind', 'opening_hours')->where('weekday', $weekday)->first();
+                if (!$opening) continue;
+                DB::table('employee_work_rules')->updateOrInsert(
+                    ['employee_id' => $employeeId, 'weekday' => $weekday],
+                    ['starts_at' => $opening->starts_at, 'ends_at' => $opening->ends_at, 'working' => true, 'created_at' => now(), 'updated_at' => now()],
+                );
+            }
+        }
 
         foreach ([
             ['demo-invoice-1', 'Autogården', 'Juli 2026', 'Syn · 1. Syn / P-syn · Reg. nr. EC20464 · SUZUKI BALENO', 'Klargøres'],

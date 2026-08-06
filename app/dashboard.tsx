@@ -47,7 +47,7 @@ type Booking = {
 
 type CustomerOption = { id: string; name: string; customerType: CustomerType; vehicles: Array<{ id: string; plate: string; vehicle: string }> };
 type VehicleLookup = { found: boolean; source: string; vehicle?: { registration: string; make: string | null; model: string | null }; customer?: { name: string; customerType: CustomerType }; lastInspectionDate?: string | null; inspectionDueDate?: string | null; dmr: { enabled: boolean; status: string } };
-type WeekDay = { date: string; weekday: number; closed: boolean; totalSlots: number; bookedSlots: number; availableSlots: string[] };
+type WeekDay = { date: string; weekday: number; closed: boolean; totalSlots: number; bookedSlots: number; availableCapacity?: number; availableSlots: string[]; staffedInspectors?: number };
 type SmsTemplate = "booking_confirmation" | "booking_reminder" | "booking_changed" | "booking_cancelled";
 
 const nav = [
@@ -434,13 +434,13 @@ export function Dashboard() {
             </div>
             <div className={`capacity-days ${weekLoading ? "loading" : ""}`}>
               {weekDays.map((day) => {
-                const available = day.availableSlots.length;
+                const available = day.availableCapacity ?? day.availableSlots.length;
                 const fullness = day.totalSlots ? Math.round(day.bookedSlots / day.totalSlots * 100) : 0;
                 const today = day.date === "2026-08-04";
                 return <button key={day.date} disabled={weekLoading || day.closed} className={`${day.closed ? "closed" : available > 0 ? "available" : "full"} ${today ? "today" : ""} ${selectedDate === day.date ? "selected-day" : ""}`} onClick={() => selectDay(day)} aria-pressed={selectedDate === day.date}>
                   <span className="capacity-day-name">{dayNames[day.weekday - 1]}{today && <em>I dag</em>}</span>
                   <strong>{dayNumber(day.date)}</strong><small>{monthName(day.date)}</small>
-                  {day.closed ? <span className="capacity-status">Lukket</span> : <><span className="capacity-status"><b>{available}</b> ledige</span><span className="capacity-bar"><i style={{ width: `${fullness}%` }} /></span></>}
+                  {day.closed ? <span className="capacity-status">Lukket</span> : <><span className="capacity-status"><b>{available}</b> ledige <small>· {day.staffedInspectors ?? 1} på planen</small></span><span className="capacity-bar"><i style={{ width: `${fullness}%` }} /></span></>}
                 </button>;
               })}
             </div>

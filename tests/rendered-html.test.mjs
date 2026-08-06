@@ -46,11 +46,16 @@ test("ugeoversigten beregner kapacitet fra åbningstider og bookinger", async ()
   assert.match(controller, /isoWeek/);
 });
 
-test("datamodellen beskytter aktive tider mod dobbeltbooking", async () => {
-  const migration = await readFile(new URL("../backend/database/migrations/2026_08_06_000007_protect_active_booking_slots.php", import.meta.url), "utf8");
-  assert.match(migration, /uidx_bookings_starts_active/);
-  assert.match(migration, /CREATE UNIQUE INDEX/i);
-  assert.match(migration, /NOT IN \('cancelled', 'no_show'\)/i);
+test("datamodellen beskytter tider ud fra den aktuelle bemanding", async () => {
+  const [migration, controller] = await Promise.all([
+    readFile(new URL("../backend/database/migrations/2026_08_06_000008_add_staffing_capacity_to_employees.php", import.meta.url), "utf8"),
+    readFile(new URL("../backend/app/Http/Controllers/OperationsController.php", import.meta.url), "utf8"),
+  ]);
+  assert.match(migration, /booking_capacity/);
+  assert.match(migration, /employee_work_rules/);
+  assert.match(controller, /slotCapacity/);
+  assert.match(controller, /lockForUpdate/);
+  assert.match(controller, /Tidspunktet er fuldt booket/);
 });
 
 test("danske bookingtider håndterer både sommer- og vintertid", async () => {
@@ -99,6 +104,7 @@ test("medarbejderdata har separat fraværstabel og API", async () => {
   assert.match(route, /proxyLaravel/);
   assert.match(controller, /employee_absences/);
   assert.match(controller, /dateFrom/);
+  assert.match(controller, /bookingCapacity/);
 });
 
 test("integrationsadaptere er deaktiverede som standard", async () => {

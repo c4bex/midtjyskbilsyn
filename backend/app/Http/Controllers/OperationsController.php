@@ -36,7 +36,13 @@ class OperationsController extends Controller
             'plate' => $this->formatPlate($row->registration_normalized), 'vehicle' => trim(($row->make ?? '').' '.($row->model ?? '')),
             'inspection' => $row->inspection_type, 'status' => $row->status,
         ]);
-        return response()->json(['bookings' => $bookings, 'availableSlots' => $this->availableSlots($date, $bookings->pluck('time')->all())]);
+        $availability = $this->availabilityForDate($date);
+        return response()->json([
+            'bookings' => $bookings,
+            'availableSlots' => $availability['availableSlots'],
+            'slotCapacities' => $availability['slotCapacities'],
+            'staffedInspectors' => $availability['staffedInspectors'],
+        ]);
     }
 
     public function createBooking(Request $request): JsonResponse
@@ -44,6 +50,13 @@ class OperationsController extends Controller
         $input = $this->bookingInput($request);
         if ($input instanceof JsonResponse) return $input;
         return DB::transaction(function () use ($input) {
+            $startsAt = CarbonImmutable::createFromFormat('Y-m-d H:i', $input['date'].' '.$input['time']);
+            DB::table('availability_rules')->where('weekday', $startsAt->isoWeekday())->lockForUpdate()->get();
+            $capacity = $this->slotCapacity($input['date'], $input['time']);
+            $booked = DB::table('bookings')->where('starts_at', $startsAt)->whereNotIn('status', ['cancelled', 'no_show'])->count();
+            if ($capacity === 0) return response()->json(['error' => 'Tidspunktet er ikke åbent i arbejdsplanen'], 409);
+            if ($booked >= $capacity) return response()->json(['error' => 'Tidspunktet er fuldt booket'], 409);
+
             $registration = $this->normalizePlate($input['plate']);
             $vehicleWords = preg_split('/\s+/', trim($input['vehicle'] ?? '')) ?: [];
             $make = array_shift($vehicleWords) ?: null;
@@ -58,9 +71,6 @@ class OperationsController extends Controller
                 $customerId = DB::table('customers')->insertGetId(['display_name' => $input['customer'], 'customer_type' => $input['customerType'], 'created_at' => now(), 'updated_at' => now()]);
                 $vehicleId = DB::table('vehicles')->insertGetId(['customer_id' => $customerId, 'registration_normalized' => $registration, 'make' => $make, 'model' => $model, 'created_at' => now(), 'updated_at' => now()]);
             }
-            $startsAt = CarbonImmutable::createFromFormat('Y-m-d H:i', $input['date'].' '.$input['time']);
-            $conflict = DB::table('bookings')->where('starts_at', $startsAt)->whereNotIn('status', ['cancelled', 'no_show'])->exists();
-            if ($conflict) return response()->json(['error' => 'Tidspunktet er allerede booket'], 409);
             $id = DB::table('bookings')->insertGetId(['customer_id' => $customerId, 'vehicle_id' => $vehicleId, 'starts_at' => $startsAt, 'ends_at' => $startsAt->addMinutes(20), 'inspection_type' => $input['inspection'], 'status' => $input['status'] ?? 'confirmed', 'source' => 'manual', 'created_at' => now(), 'updated_at' => now()]);
             $this->audit('booking.created', 'booking', $id, null, $input);
             if ($input['customerType'] === 'private') {
@@ -82,14 +92,20 @@ class OperationsController extends Controller
         }
         $input = $this->bookingInput($request);
         if ($input instanceof JsonResponse) return $input;
-        DB::transaction(function () use ($booking, $current, $input) {
+        $result = DB::transaction(function () use ($booking, $current, $input) {
             [$make, $model] = $this->splitVehicle($input['vehicle']);
             $startsAt = CarbonImmutable::createFromFormat('Y-m-d H:i', $input['date'].' '.$input['time']);
+            DB::table('availability_rules')->where('weekday', $startsAt->isoWeekday())->lockForUpdate()->get();
+            $capacity = $this->slotCapacity($input['date'], $input['time']);
+            $booked = DB::table('bookings')->where('starts_at', $startsAt)->where('id', '!=', $booking)->whereNotIn('status', ['cancelled', 'no_show'])->count();
+            if ($capacity === 0 || $booked >= $capacity) return response()->json(['error' => 'Det valgte tidspunkt har ikke flere ledige pladser'], 409);
             DB::table('customers')->where('id', $current->customer_id)->update(['display_name' => $input['customer'], 'customer_type' => $input['customerType'], 'updated_at' => now()]);
             DB::table('vehicles')->where('id', $current->vehicle_id)->update(['registration_normalized' => $this->normalizePlate($input['plate']), 'make' => $make, 'model' => $model, 'updated_at' => now()]);
             DB::table('bookings')->where('id', $booking)->update(['starts_at' => $startsAt, 'ends_at' => $startsAt->addMinutes(20), 'inspection_type' => $input['inspection'], 'updated_at' => now()]);
             $this->audit('booking.updated', 'booking', $booking, (array) $current, $input);
+            return null;
         });
+        if ($result instanceof JsonResponse) return $result;
         return response()->json(['ok' => true]);
     }
 
@@ -162,26 +178,23 @@ class OperationsController extends Controller
             $opening = $rules->firstWhere('kind', 'opening_hours');
             $closed = !$opening || $rules->whereIn('kind', ['closed_day', 'holiday', 'vacation'])->isNotEmpty();
             if ($closed) return ['date' => $date->toDateString(), 'weekday' => $date->isoWeekday(), 'closed' => true, 'totalSlots' => 0, 'bookedSlots' => 0, 'availableSlots' => []];
-            $breaks = $rules->where('kind', 'break');
-            $slots = $this->timeSlots(substr($opening->starts_at, 0, 5), substr($opening->ends_at, 0, 5), $breaks);
-            $occupied = DB::table('bookings')->whereDate('starts_at', $date)->whereNotIn('status', ['cancelled', 'no_show'])->pluck('starts_at')->map(fn ($value) => CarbonImmutable::parse($value)->format('H:i'))->all();
-            $available = array_values(array_diff($slots, $occupied));
-            return ['date' => $date->toDateString(), 'weekday' => $date->isoWeekday(), 'closed' => false, 'totalSlots' => count($slots), 'bookedSlots' => count($slots) - count($available), 'availableSlots' => $available];
+            $availability = $this->availabilityForDate($date->toDateString());
+            return ['date' => $date->toDateString(), 'weekday' => $date->isoWeekday(), 'closed' => false, 'totalSlots' => $availability['totalCapacity'], 'bookedSlots' => $availability['bookedSlots'], 'availableCapacity' => $availability['availableCapacity'], 'availableSlots' => $availability['availableSlots'], 'staffedInspectors' => $availability['staffedInspectors']];
         });
         return response()->json(['week' => $startDate->isoWeek(), 'start' => $start, 'end' => $startDate->addDays(6)->toDateString(), 'days' => $days]);
     }
 
     public function employees(): JsonResponse
     {
-        return response()->json(['employees' => DB::table('employees')->orderBy('display_name')->get()->map(fn ($employee) => ['id' => (string) $employee->id, 'name' => $employee->display_name, 'role' => $employee->role, 'active' => (bool) $employee->active]), 'absences' => DB::table('employee_absences')->orderBy('date_from')->get(), 'workRules' => DB::table('employee_work_rules')->orderBy('employee_id')->orderBy('weekday')->get()]);
+        return response()->json(['employees' => DB::table('employees')->orderBy('display_name')->get()->map(fn ($employee) => ['id' => (string) $employee->id, 'name' => $employee->display_name, 'role' => $employee->role, 'active' => (bool) $employee->active, 'bookingCapacity' => (bool) $employee->booking_capacity]), 'absences' => DB::table('employee_absences')->orderBy('date_from')->get(), 'workRules' => DB::table('employee_work_rules')->orderBy('employee_id')->orderBy('weekday')->get()]);
     }
 
     public function updateEmployee(Request $request): JsonResponse
     {
         $type = $request->string('type')->toString();
         if ($type === 'employee_update') {
-            $data = $request->validate(['employeeId' => ['required', 'integer', 'exists:employees,id'], 'displayName' => ['required', 'string', 'max:160'], 'role' => ['required', 'string', 'max:80'], 'active' => ['required', 'boolean']]);
-            DB::table('employees')->where('id', $data['employeeId'])->update(['display_name' => $data['displayName'], 'role' => $data['role'], 'active' => $data['active'], 'updated_at' => now()]);
+            $data = $request->validate(['employeeId' => ['required', 'integer', 'exists:employees,id'], 'displayName' => ['required', 'string', 'max:160'], 'role' => ['required', 'string', 'max:80'], 'active' => ['required', 'boolean'], 'bookingCapacity' => ['required', 'boolean']]);
+            DB::table('employees')->where('id', $data['employeeId'])->update(['display_name' => $data['displayName'], 'role' => $data['role'], 'active' => $data['active'], 'booking_capacity' => $data['bookingCapacity'], 'updated_at' => now()]);
             $this->audit('employee.updated', 'employee', $data['employeeId'], null, $data);
             return response()->json(['ok' => true]);
         }
@@ -238,11 +251,50 @@ class OperationsController extends Controller
     private function normalizePlate(string $value): string { return mb_strtoupper(preg_replace('/[^A-ZÆØÅ0-9]/u', '', $value)); }
     private function formatPlate(string $value): string { $plate = $this->normalizePlate($value); return strlen($plate) === 7 ? substr($plate, 0, 2).' '.substr($plate, 2, 2).' '.substr($plate, 4) : $plate; }
     private function splitVehicle(string $vehicle): array { $words = preg_split('/\s+/', trim($vehicle)) ?: []; $make = array_shift($words) ?: null; return [$make, trim(implode(' ', $words)) ?: null]; }
-    private function availableSlots(string $date, array $occupied): array
+    private function slotCapacity(string $date, string $time): int
     {
-        $day = CarbonImmutable::parse($date); $rules = DB::table('availability_rules')->where(fn ($query) => $query->where('weekday', $day->isoWeekday())->orWhere(fn ($period) => $period->whereDate('date_from', '<=', $day)->whereDate('date_to', '>=', $day)))->get();
-        if ($rules->whereIn('kind', ['closed_day', 'holiday', 'vacation'])->isNotEmpty() || !($opening = $rules->firstWhere('kind', 'opening_hours'))) return [];
-        return array_values(array_diff($this->timeSlots(substr($opening->starts_at, 0, 5), substr($opening->ends_at, 0, 5), $rules->where('kind', 'break')), $occupied));
+        $availability = $this->availabilityForDate($date);
+        return (int) ($availability['slotCapacities'][$time] ?? 0);
+    }
+
+    private function availabilityForDate(string $date): array
+    {
+        $day = CarbonImmutable::parse($date);
+        $rules = DB::table('availability_rules')->where(fn ($query) => $query
+            ->where('weekday', $day->isoWeekday())
+            ->orWhere(fn ($period) => $period->whereDate('date_from', '<=', $day)->whereDate('date_to', '>=', $day)))
+            ->get();
+        $opening = $rules->firstWhere('kind', 'opening_hours');
+        if (!$opening || $rules->whereIn('kind', ['closed_day', 'holiday', 'vacation'])->isNotEmpty()) {
+            return ['availableSlots' => [], 'slotCapacities' => [], 'staffedInspectors' => 0, 'totalCapacity' => 0, 'bookedSlots' => 0, 'availableCapacity' => 0];
+        }
+
+        $slots = $this->timeSlots(substr($opening->starts_at, 0, 5), substr($opening->ends_at, 0, 5), $rules->where('kind', 'break'));
+        $employeeIds = DB::table('employees')->where('active', true)->where('booking_capacity', true)->pluck('id');
+        $absentIds = DB::table('employee_absences')->whereIn('employee_id', $employeeIds)
+            ->whereDate('date_from', '<=', $day)->whereDate('date_to', '>=', $day)->pluck('employee_id')->all();
+        $workRules = DB::table('employee_work_rules')->whereIn('employee_id', $employeeIds)
+            ->where('weekday', $day->isoWeekday())->where('working', true)->get()
+            ->reject(fn ($rule) => in_array($rule->employee_id, $absentIds, true));
+        $bookedByTime = DB::table('bookings')->whereDate('starts_at', $day)->whereNotIn('status', ['cancelled', 'no_show'])
+            ->get(['starts_at'])->map(fn ($booking) => CarbonImmutable::parse($booking->starts_at)->format('H:i'))->countBy();
+
+        $slotCapacities = [];
+        foreach ($slots as $slot) {
+            $slotEnd = CarbonImmutable::createFromFormat('H:i', $slot)->addMinutes(20)->format('H:i');
+            $slotCapacities[$slot] = $workRules->filter(fn ($rule) => substr($rule->starts_at, 0, 5) <= $slot && substr($rule->ends_at, 0, 5) >= $slotEnd)->count();
+        }
+        $availableSlots = array_values(array_filter($slots, fn ($slot) => ($bookedByTime[$slot] ?? 0) < $slotCapacities[$slot]));
+        $availableCapacity = array_sum(array_map(fn ($slot) => max(0, $slotCapacities[$slot] - ($bookedByTime[$slot] ?? 0)), $slots));
+
+        return [
+            'availableSlots' => $availableSlots,
+            'slotCapacities' => $slotCapacities,
+            'staffedInspectors' => $workRules->pluck('employee_id')->unique()->count(),
+            'totalCapacity' => array_sum($slotCapacities),
+            'bookedSlots' => $bookedByTime->sum(),
+            'availableCapacity' => $availableCapacity,
+        ];
     }
     private function timeSlots(string $start, string $end, $breaks): array
     {

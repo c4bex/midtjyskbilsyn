@@ -471,6 +471,35 @@ main { grid-column: 2; min-width: 0; }
 .live-design .closure-form input,
 .live-design .closure-form select { font-size: 10px; }
 
+.live-design .employee-name > span { min-width: 0; display: grid; gap: 3px; }
+.live-design .employee-name small { color: var(--green); font-size: 9px; font-weight: 700; }
+.live-design .capacity-status small { color: #60766d; font-size: 9px; font-weight: 600; }
+.live-design .capacity-edit { grid-template-columns: 1.2fr 1.1fr 105px minmax(150px,auto) auto auto; }
+.live-design .capacity-toggle { display: flex; align-items: center; gap: 7px; color: #43586c; font-size: 10px; font-weight: 700; }
+.live-design .capacity-toggle input { width: 17px; height: 17px; accent-color: var(--green); }
+.live-design .schedule-heading { padding-bottom: 13px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.live-design .schedule-heading h2 { margin-bottom: 3px; }
+.live-design .schedule-heading p { margin: 0; color: #748292; font-size: 10px; }
+.live-design .schedule-heading select { min-width: 260px; min-height: 40px; padding: 0 11px; border: 1px solid #d8e1e9; border-radius: 8px; color: #30465c; background: #fff; font-size: 11px; font-weight: 700; }
+.live-design .capacity-info { margin-bottom: 3px; padding: 11px 12px; display: flex; align-items: center; gap: 10px; border: 1px solid #e1e6eb; border-radius: 9px; color: #71808e; background: #f7f9fa; }
+.live-design .capacity-info.counts { color: var(--green); border-color: #b9dfd0; background: #eff9f4; }
+.live-design .capacity-info > div { display: grid; gap: 2px; }
+.live-design .capacity-info strong { color: #304c42; font-size: 10px; }
+.live-design .capacity-info small { color: #75867f; font-size: 9px; }
+.live-design .schedule-row { grid-template-columns: 1fr minmax(230px,1fr) 140px; min-height: 54px; font-size: 11px; }
+.live-design .schedule-row input[type="time"] { min-height: 34px; padding: 0 8px; border: 1px solid #d8e1e8; border-radius: 7px; color: #344b60; background: #fff; font-size: 11px; }
+.live-design .schedule-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--green); }
+.live-design .schedule-row label { font-size: 10px; font-weight: 700; }
+.live-design .schedule-card > .primary-button { margin-top: 14px; }
+.live-design .capacity-week { margin-top: 13px; padding: 18px; }
+.live-design .capacity-week h2 { margin: 0 0 4px; font-size: 14px; }
+.live-design .capacity-week > p { margin: 0 0 13px; color: #748292; font-size: 10px; }
+.live-design .capacity-week > div { display: grid; grid-template-columns: repeat(7,1fr); gap: 8px; }
+.live-design .capacity-week article { min-width: 0; padding: 12px 8px; display: grid; gap: 3px; border: 1px solid #dce6e1; border-radius: 9px; background: #f5fbf8; text-align: center; }
+.live-design .capacity-week article span { color: #687b73; font-size: 9px; font-weight: 700; }
+.live-design .capacity-week article strong { color: var(--green); font-size: 20px; }
+.live-design .capacity-week article small { color: #77857f; font-size: 8px; }
+
 @media (min-width: 1101px) {
   .live-design .workspace { display: block; }
   .live-design .day-layout { display: grid; grid-template-columns: minmax(0,1fr) 310px; align-items: start; gap: 16px; }
@@ -493,6 +522,10 @@ main { grid-column: 2; min-width: 0; }
   .live-design .day-aside { grid-row: 2; }
   .live-design .booking-list-card { grid-row: 3; }
   .live-design .available-times { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .live-design .capacity-edit { grid-template-columns: 1fr; }
+  .live-design .schedule-heading { align-items: stretch; flex-direction: column; }
+  .live-design .schedule-heading select { width: 100%; min-width: 0; }
+  .live-design .capacity-week > div { overflow-x: auto; grid-template-columns: repeat(7,100px); }
 }
 
 @media (max-width: 760px) {

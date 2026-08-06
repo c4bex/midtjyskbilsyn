@@ -18,8 +18,9 @@ class OperationsApiTest extends TestCase
     {
         parent::setUp();
         $this->user = User::factory()->create();
-        DB::table('employees')->insert(['user_id' => $this->user->id, 'display_name' => 'Testadministrator', 'role' => 'Teknisk ansvarlig / Ejer', 'active' => true, 'created_at' => now(), 'updated_at' => now()]);
+        $employeeId = DB::table('employees')->insertGetId(['user_id' => $this->user->id, 'display_name' => 'Testadministrator', 'role' => 'Teknisk ansvarlig / Ejer', 'active' => true, 'booking_capacity' => true, 'created_at' => now(), 'updated_at' => now()]);
         foreach (range(1, 5) as $weekday) DB::table('availability_rules')->insert(['kind' => 'opening_hours', 'weekday' => $weekday, 'starts_at' => '08:00', 'ends_at' => '16:00', 'label' => 'Normal åbningstid', 'created_at' => now(), 'updated_at' => now()]);
+        foreach (range(1, 5) as $weekday) DB::table('employee_work_rules')->insert(['employee_id' => $employeeId, 'weekday' => $weekday, 'starts_at' => '08:00', 'ends_at' => '16:00', 'working' => true, 'created_at' => now(), 'updated_at' => now()]);
     }
 
     public function test_unauthenticated_requests_are_rejected(): void
@@ -59,6 +60,34 @@ class OperationsApiTest extends TestCase
         $this->actingAs($this->user)->postJson('/api/bookings', $payload)->assertCreated();
         $this->actingAs($this->user)->postJson('/api/bookings', $payload)->assertConflict();
         $this->assertDatabaseCount('bookings', 1);
+    }
+
+    public function test_two_inspectors_allow_two_bookings_at_the_same_time(): void
+    {
+        $date = now()->next('Monday')->toDateString();
+        $secondEmployee = DB::table('employees')->insertGetId(['display_name' => 'Ekstra synsinspektør', 'role' => 'Synsinspektør', 'active' => true, 'booking_capacity' => true, 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('employee_work_rules')->insert(['employee_id' => $secondEmployee, 'weekday' => 1, 'starts_at' => '08:00', 'ends_at' => '16:00', 'working' => true, 'created_at' => now(), 'updated_at' => now()]);
+        $payload = ['customer' => 'Fiktiv Kunde', 'customerType' => 'business', 'vehicle' => 'Ford Transit', 'date' => $date, 'time' => '09:20', 'inspection' => 'Periodisk syn', 'status' => 'confirmed'];
+
+        $this->actingAs($this->user)->postJson('/api/bookings', $payload + ['plate' => 'XY12345'])->assertCreated();
+        $this->actingAs($this->user)->getJson('/api/calendar/week?start='.$date)
+            ->assertOk()->assertJsonPath('days.0.staffedInspectors', 2)->assertJsonPath('days.0.availableSlots.4', '09:20');
+        $this->actingAs($this->user)->postJson('/api/bookings', $payload + ['plate' => 'XY12346'])->assertCreated();
+        $this->actingAs($this->user)->postJson('/api/bookings', $payload + ['plate' => 'XY12347'])->assertConflict();
+
+        $final = $this->actingAs($this->user)->getJson('/api/calendar/week?start='.$date)->assertOk();
+        $this->assertNotContains('09:20', $final->json('days.0.availableSlots'));
+    }
+
+    public function test_absence_removes_employee_from_booking_capacity(): void
+    {
+        $date = now()->next('Monday')->toDateString();
+        $employeeId = DB::table('employees')->where('booking_capacity', true)->value('id');
+        DB::table('employee_absences')->insert(['employee_id' => $employeeId, 'kind' => 'Ferie', 'date_from' => $date, 'date_to' => $date, 'created_at' => now(), 'updated_at' => now()]);
+
+        $this->actingAs($this->user)->getJson('/api/calendar/week?start='.$date)
+            ->assertOk()->assertJsonPath('days.0.totalSlots', 0)->assertJsonPath('days.0.staffedInspectors', 0);
+        $this->actingAs($this->user)->postJson('/api/bookings', ['customer' => 'Fiktiv Kunde', 'customerType' => 'business', 'plate' => 'XY12345', 'vehicle' => 'Ford Transit', 'date' => $date, 'time' => '09:20', 'inspection' => 'Periodisk syn', 'status' => 'confirmed'])->assertConflict();
     }
 
     public function test_dmr_lookup_is_mapped_without_exposing_token(): void
