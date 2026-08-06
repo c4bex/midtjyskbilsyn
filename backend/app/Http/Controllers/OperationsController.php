@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
@@ -305,6 +306,38 @@ class OperationsController extends Controller
         });
 
         return response()->json(['permissionCatalog' => Permission::catalog(), 'employees' => $employees, 'absences' => DB::table('employee_absences')->orderBy('date_from')->get(), 'workRules' => DB::table('employee_work_rules')->orderBy('employee_id')->orderBy('weekday')->get()]);
+    }
+
+    public function businessPortalCompanies(): JsonResponse
+    {
+        $settings = DB::table('business_portal_settings')->get()->keyBy('customer_id');
+        $userCounts = DB::table('business_portal_users')->select('customer_id', DB::raw('count(*) as total'))->where('active', true)->groupBy('customer_id')->pluck('total', 'customer_id');
+        $companies = DB::table('customers')->where('customer_type', 'business')->orderBy('display_name')->get()->map(function ($customer) use ($settings, $userCounts) {
+            $setting = $settings->get($customer->id);
+
+            return ['id' => (string) $customer->id, 'name' => $customer->display_name, 'portalActive' => (bool) ($setting?->portal_active ?? false), 'smsActive' => (bool) ($setting?->sms_active ?? false), 'customerNumber' => $setting?->customer_number, 'defaultDepartment' => $setting?->default_department, 'allowedDepartments' => $setting?->allowed_departments ? json_decode($setting->allowed_departments, true) : [], 'allowedInspectionTypes' => $setting?->allowed_inspection_types ? json_decode($setting->allowed_inspection_types, true) : [], 'requisitionRequirement' => $setting?->requisition_requirement ?? 'optional', 'changeCutoffMinutes' => (int) ($setting?->change_cutoff_minutes ?? 120), 'bookingHorizonDays' => (int) ($setting?->booking_horizon_days ?? 90), 'activeUsers' => (int) ($userCounts[$customer->id] ?? 0)];
+        });
+
+        return response()->json(['companies' => $companies]);
+    }
+
+    public function updateBusinessPortal(Request $request): JsonResponse
+    {
+        $type = $request->string('type')->toString();
+        if ($type === 'company') {
+            $data = $request->validate(['customerId' => ['required', 'integer', 'exists:customers,id'], 'portalActive' => ['required', 'boolean'], 'smsActive' => ['required', 'boolean'], 'customerNumber' => ['nullable', 'string', 'max:40'], 'defaultDepartment' => ['nullable', 'string', 'max:120'], 'allowedDepartments' => ['nullable', 'array'], 'allowedInspectionTypes' => ['nullable', 'array'], 'requisitionRequirement' => ['required', 'in:hidden,optional,required'], 'changeCutoffMinutes' => ['required', 'integer', 'min:0', 'max:10080'], 'bookingHorizonDays' => ['required', 'integer', 'min:1', 'max:730']]);
+            abort_unless(DB::table('customers')->where('id', $data['customerId'])->where('customer_type', 'business')->exists(), 422, 'Kun erhvervskunder kan få portaladgang');
+            DB::table('business_portal_settings')->updateOrInsert(['customer_id' => $data['customerId']], ['customer_number' => $data['customerNumber'] ?? null, 'default_department' => $data['defaultDepartment'] ?? null, 'allowed_departments' => json_encode(array_values($data['allowedDepartments'] ?? [])), 'allowed_inspection_types' => json_encode(array_values($data['allowedInspectionTypes'] ?? [])), 'portal_active' => $data['portalActive'], 'sms_active' => $data['smsActive'], 'requisition_requirement' => $data['requisitionRequirement'], 'change_cutoff_minutes' => $data['changeCutoffMinutes'], 'booking_horizon_days' => $data['bookingHorizonDays'], 'updated_at' => now(), 'created_at' => now()]);
+            $this->audit('business_portal.company.updated', 'customer', $data['customerId'], null, $data);
+
+            return response()->json(['ok' => true]);
+        }
+        $data = $request->validate(['type' => ['required', 'in:user'], 'customerId' => ['required', 'integer', 'exists:customers,id'], 'name' => ['required', 'string', 'max:160'], 'email' => ['required', 'email', 'max:255', 'unique:business_portal_users,email'], 'phone' => ['nullable', 'string', 'max:32'], 'password' => ['required', 'string', 'min:8'], 'role' => ['required', 'in:admin,employee,read_only']]);
+        abort_unless(DB::table('customers')->where('id', $data['customerId'])->where('customer_type', 'business')->exists(), 422, 'Kun erhvervskunder kan få portalbrugere');
+        $id = DB::table('business_portal_users')->insertGetId(['customer_id' => $data['customerId'], 'name' => $data['name'], 'email' => $data['email'], 'phone' => $data['phone'] ?? null, 'password' => Hash::make($data['password']), 'role' => $data['role'], 'active' => true, 'created_at' => now(), 'updated_at' => now()]);
+        $this->audit('business_portal.user.created', 'business_portal_user', $id, null, ['customerId' => $data['customerId'], 'email' => $data['email'], 'role' => $data['role']]);
+
+        return response()->json(['id' => (string) $id], 201);
     }
 
     public function updateEmployee(Request $request): JsonResponse

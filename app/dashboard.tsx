@@ -31,6 +31,7 @@ import { SmsSettingsView } from "./sms-settings-view";
 import { InvoiceView } from "./invoice-view";
 import { EmployeesView } from "./employees-view";
 import { DriftView } from "./drift-view";
+import { BusinessPortalView } from "./business-portal-view";
 import { AiAssistant } from "./ai-assistant";
 
 type CustomerType = "private" | "business";
@@ -67,6 +68,7 @@ const nav = [
 const administrationNav = [
   { id: "employees", label: "Medarbejdere", icon: ShieldCheck },
   { id: "availability", label: "Planlægning", icon: Clock3 },
+  { id: "portal", label: "Branchekundeportal", icon: Building2 },
   { id: "drift", label: "Drift", icon: CheckCircle2 },
   { id: "sms", label: "Indstillinger", icon: Settings },
 ];
@@ -123,7 +125,7 @@ export function Dashboard() {
   const [sessionPermissions, setSessionPermissions] = useState<string[]>([]);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [activeView, setActiveView] = useState<"bookings" | "customers" | "availability" | "sms" | "invoices" | "employees" | "drift">("bookings");
+  const [activeView, setActiveView] = useState<"bookings" | "customers" | "availability" | "sms" | "invoices" | "employees" | "portal" | "drift">("bookings");
   const [filter, setFilter] = useState<"alle" | CustomerType>("alle");
   const [modalOpen, setModalOpen] = useState(false);
   const [notice, setNotice] = useState("");
@@ -159,6 +161,7 @@ export function Dashboard() {
   const visibleAdministrationNav = administrationNav.filter((item) => {
     if (item.id === "employees") return sessionPermissions.includes("employees.write");
     if (item.id === "availability") return sessionPermissions.includes("settings.write");
+    if (item.id === "portal") return sessionPermissions.includes("settings.write");
     if (item.id === "sms") return sessionPermissions.includes("settings.write");
     return sessionPermissions.includes("employees.write") || sessionPermissions.includes("settings.write");
   });
@@ -207,7 +210,7 @@ export function Dashboard() {
   };
 
   const navigate = (view: string) => {
-    setActiveView(view as "bookings" | "customers" | "availability" | "sms" | "invoices" | "employees" | "drift");
+    setActiveView(view as "bookings" | "customers" | "availability" | "sms" | "invoices" | "employees" | "portal" | "drift");
     setMenuOpen(false);
     setSecondaryMenuOpen(false);
     setModalOpen(false);
@@ -463,7 +466,7 @@ export function Dashboard() {
       <main className="live-main">
 
         <div className="workspace">
-          {activeView === "customers" ? <CustomersView onNotify={flash} /> : activeView === "availability" ? <AvailabilityView onNotify={flash} /> : activeView === "sms" ? <SmsSettingsView onNotify={flash} /> : activeView === "invoices" ? <InvoiceView onNotify={flash} /> : activeView === "employees" ? <EmployeesView onNotify={flash} /> : activeView === "drift" ? <DriftView /> : <>
+          {activeView === "customers" ? <CustomersView onNotify={flash} /> : activeView === "availability" ? <AvailabilityView onNotify={flash} /> : activeView === "sms" ? <SmsSettingsView onNotify={flash} /> : activeView === "invoices" ? <InvoiceView onNotify={flash} /> : activeView === "employees" ? <EmployeesView onNotify={flash} /> : activeView === "portal" ? <BusinessPortalView onNotify={flash} /> : activeView === "drift" ? <DriftView /> : <>
           <section className="page-heading">
             <div>
               <p className="eyebrow">{dayNames[new Date(`${selectedDate}T12:00:00Z`).getUTCDay() === 0 ? 6 : new Date(`${selectedDate}T12:00:00Z`).getUTCDay() - 1]} · {dayNumber(selectedDate)}. {monthName(selectedDate)} {selectedDate.slice(0, 4)}</p>

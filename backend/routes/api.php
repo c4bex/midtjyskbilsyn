@@ -59,6 +59,8 @@ Route::middleware(['web', 'api.token', 'throttle:120,1'])->group(function () {
     Route::delete('/availability/{rule}', [OperationsController::class, 'deleteClosure'])->middleware('permission:settings.write');
     Route::get('/employees', [OperationsController::class, 'employees'])->middleware('permission:employees.write');
     Route::post('/employees', [OperationsController::class, 'updateEmployee'])->middleware('permission:employees.write');
+    Route::get('/business-portal/companies', [OperationsController::class, 'businessPortalCompanies'])->middleware('permission:settings.write');
+    Route::post('/business-portal', [OperationsController::class, 'updateBusinessPortal'])->middleware('permission:settings.write');
     Route::get('/invoices', [OperationsController::class, 'invoices']);
     Route::patch('/invoices', [OperationsController::class, 'updateInvoice'])->middleware('permission:invoices.write');
     Route::post('/invoices/approve', [OperationsController::class, 'approveInvoices'])->middleware('permission:invoices.write');
