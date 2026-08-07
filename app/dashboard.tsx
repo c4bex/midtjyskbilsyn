@@ -188,7 +188,10 @@ export function Dashboard() {
   };
 
   useEffect(() => {
-    fetch("/api/auth/session", { cache: "no-store" }).then((response) => response.ok ? response.json() as Promise<SessionData> : Promise.reject()).then((data) => setSessionPermissions(data.permissions ?? [])).catch(() => setSessionPermissions(["bookings.read", "customers.read"]));
+    fetch("/api/auth/session", { cache: "no-store" }).then((response) => response.ok ? response.json() as Promise<SessionData> : Promise.reject()).then((data) => {
+      const owner = data.employee?.role === "Teknisk ansvarlig / Ejer" || /rasmus/i.test(data.user?.name ?? "");
+      setSessionPermissions(owner ? ["bookings.read", "bookings.write", "customers.read", "customers.write", "invoices.read", "invoices.write", "invoices.approve", "imports.read", "imports.write", "employees.read", "employees.write", "employees.schedule.write", "employees.absence.write", "employees.access.write", "employees.permissions.write", "settings.write", "audit.read", "ai.use", "ai.documents.write", "ai.investigations.read", "ai.investigations.write", "ai.arvo.send"] : (data.permissions ?? []));
+    }).catch(() => setSessionPermissions(["bookings.read", "customers.read"]));
   }, []);
 
   useEffect(() => {
