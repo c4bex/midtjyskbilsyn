@@ -11,7 +11,9 @@ $sessionPayload = static function (): array {
     $user = Auth::user();
     $employee = $user ? DB::table('employees')->where('user_id', $user->id)->first() : null;
     $permissionRows = $employee ? DB::table('employee_permissions')->where('employee_id', $employee->id)->get() : collect();
-    $permissions = $employee?->role === 'Teknisk ansvarlig / Ejer'
+    $ownerEmail = (string) env('SEED_ADMIN_EMAIL', '');
+    $isOwner = $employee?->role === 'Teknisk ansvarlig / Ejer' || ($ownerEmail !== '' && $user?->email === $ownerEmail);
+    $permissions = $isOwner
         ? array_keys(Permission::catalog())
         : ($permissionRows->isNotEmpty() ? $permissionRows->where('allowed', true)->pluck('permission_key')->values()->all() : Permission::rolePermissions((string) ($employee?->role ?? '')));
 

@@ -52,9 +52,12 @@ class Permission
     {
         $employee = Auth::check() ? DB::table('employees')->where('user_id', Auth::id())->first() : null;
         $role = $employee?->role ?? (string) env('BOOKING_API_ROLE', 'Teknisk ansvarlig / Ejer');
+        $ownerEmail = (string) env('SEED_ADMIN_EMAIL', '');
+        $isOwner = $role === 'Teknisk ansvarlig / Ejer'
+            || ($ownerEmail !== '' && Auth::user()?->email === $ownerEmail);
         // AI-assistenten er en fast basisfunktion for interne brugere. De øvrige
         // rettigheder starter med rollens standarder og kan derefter overriden.
-        if ($role === 'Teknisk ansvarlig / Ejer') {
+        if ($isOwner) {
             // The owner must never be locked out by stale per-employee overrides.
             $allowed = true;
         } elseif ($permission === 'ai.use') {
