@@ -19,7 +19,8 @@ x-api-environment: &api-environment
   QUEUE_CONNECTION: database
   BOOKING_API_TOKEN: ${BOOKING_API_TOKEN}
   BOOKING_API_ROLE: "Teknisk ansvarlig / Ejer"
-  SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
+  # Safe test default; production must override this in the NAS .env.
+  SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-test@test.dk}
   # Bevidst enkel adgangskode i det private NAS-testmiljø.
   SEED_ADMIN_PASSWORD: "test"
   DMR_LOOKUP_BASE_URL: ${DMR_LOOKUP_BASE_URL}

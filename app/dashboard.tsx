@@ -57,7 +57,12 @@ type WeekDay = { date: string; weekday: number; closed: boolean; totalSlots: num
 type SmsTemplate = "booking_confirmation" | "booking_reminder" | "booking_changed" | "booking_cancelled";
 type InspectionType = { id: number; name: string; required_slots: number; is_active: boolean };
 type SearchResult = { type: "booking" | "customer" | "vehicle"; id: string; title: string; subtitle: string; booking?: Booking };
-type SessionData = { authenticated: boolean; employee?: { id: string; role: string } | null; permissions?: string[] };
+type SessionData = {
+  authenticated: boolean;
+  user?: { id?: string; name?: string; email?: string } | null;
+  employee?: { id: string; role: string } | null;
+  permissions?: string[];
+};
 
 const nav = [
   { id: "bookings", label: "Bookinger", icon: CalendarDays },
