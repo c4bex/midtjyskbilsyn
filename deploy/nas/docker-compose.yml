@@ -103,7 +103,9 @@ services:
   web:
     # Webdelen bygges i GitHub Actions. NAS'en henter derfor kun det færdige
     # image ved designændringer i stedet for at installere og bygge Node lokalt.
-    image: ${WEB_IMAGE:-ghcr.io/c4bex/midtjyskbilsyn-web:test}
+    # Testmiljøet skal altid hente den udgivne build fra GHCR.
+    # Et lokalt image-tag kan ellers fastholde en ældre frontend-build.
+    image: ghcr.io/c4bex/midtjyskbilsyn-web:test
     pull_policy: always
     restart: unless-stopped
     environment:
