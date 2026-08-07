@@ -39,6 +39,9 @@ x-api-environment: &api-environment
 
 x-api-service: &api-service
   image: midtjysk-bilsyn-api:${APP_IMAGE_TAG:-latest}
+  # API'et skal bygges på ny ved hver NAS-udrulning, så rettigheds- og
+  # migrationsændringer ikke skjules af et gammelt lokalt image.
+  pull_policy: build
   build:
     context: https://github.com/c4bex/midtjyskbilsyn.git#main:backend
   restart: unless-stopped
