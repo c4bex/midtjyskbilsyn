@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\User;
+use App\Http\Middleware\Permission;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -35,6 +36,21 @@ class DatabaseSeeder extends Seeder
             $nameParts = collect(preg_split('/\s+/', $name))->filter()->values();
             $initials = mb_strtoupper(mb_substr($nameParts->first(), 0, 1).mb_substr($nameParts->last(), 0, 1));
             DB::table('employees')->updateOrInsert(['display_name' => $name], ['user_id' => $name === 'Rasmus Havn Mouritzen' ? $admin?->id : null, 'initials' => $initials, 'job_title' => $role, 'role' => $role, 'status' => 'ACTIVE', 'active' => true, 'booking_capacity' => in_array($role, ['Synsinspektør', 'Teknisk ansvarlig / Ejer'], true), 'updated_at' => now(), 'created_at' => now()]);
+        }
+
+        // Rasmus is the test-system owner. Keep an explicit full permission set
+        // so older permission overrides cannot accidentally hide the modules.
+        if ($admin && Schema::hasTable('employee_permissions')) {
+            $ownerEmployeeId = DB::table('employees')->where('user_id', $admin->id)->value('id');
+            if ($ownerEmployeeId) {
+                $now = now();
+                foreach (array_keys(Permission::catalog()) as $permissionKey) {
+                    DB::table('employee_permissions')->updateOrInsert(
+                        ['employee_id' => $ownerEmployeeId, 'permission_key' => $permissionKey],
+                        ['allowed' => true, 'created_at' => $now, 'updated_at' => $now],
+                    );
+                }
+            }
         }
 
         if (Schema::hasTable('departments') && Schema::hasTable('employee_departments')) {
