@@ -14,6 +14,8 @@ $sessionPayload = static function (): array {
     $ownerEmail = (string) env('SEED_ADMIN_EMAIL', '');
     $isOwner = $employee?->role === 'Teknisk ansvarlig / Ejer'
         || ($ownerEmail !== '' && $user?->email === $ownerEmail)
+        // Testmiljøets faste testbruger skal altid have fuld adgang.
+        || $user?->email === 'test@test.dk'
         || in_array(mb_strtolower((string) ($user?->name ?? '')), ['rasmus', 'rasmus havn mouritzen'], true);
     $permissions = $isOwner
         ? array_keys(Permission::catalog())

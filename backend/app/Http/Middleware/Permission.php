@@ -54,7 +54,9 @@ class Permission
         $role = $employee?->role ?? (string) env('BOOKING_API_ROLE', 'Teknisk ansvarlig / Ejer');
         $ownerEmail = (string) env('SEED_ADMIN_EMAIL', '');
         $isOwner = $role === 'Teknisk ansvarlig / Ejer'
-            || ($ownerEmail !== '' && Auth::user()?->email === $ownerEmail);
+            || ($ownerEmail !== '' && Auth::user()?->email === $ownerEmail)
+            // Testmiljøets faste testbruger skal ikke låses ude af moduler.
+            || Auth::user()?->email === 'test@test.dk';
         // AI-assistenten er en fast basisfunktion for interne brugere. De øvrige
         // rettigheder starter med rollens standarder og kan derefter overriden.
         if ($isOwner) {
