@@ -590,7 +590,9 @@ class OperationsController extends Controller
         $departments = Schema::hasTable('departments') ? DB::table('departments')->where('active', true)->orderBy('name')->get(['id', 'name']) : collect();
         $employees = DB::table('employees')->orderBy('display_name')->get()->map(function ($employee) use ($permissionRows) {
             $rows = $permissionRows->get($employee->id, collect());
-            $allowed = $rows->isNotEmpty() ? $rows->where('allowed', true)->pluck('permission_key')->values()->all() : Permission::rolePermissions((string) $employee->role);
+            $allowed = $employee->role === 'Teknisk ansvarlig / Ejer'
+                ? array_keys(Permission::catalog())
+                : ($rows->isNotEmpty() ? $rows->where('allowed', true)->pluck('permission_key')->values()->all() : Permission::rolePermissions((string) $employee->role));
 
             $user = $employee->user_id ? DB::table('users')->where('id', $employee->user_id)->first(['email', 'last_login_at']) : null;
             return [

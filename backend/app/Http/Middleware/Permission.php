@@ -54,7 +54,10 @@ class Permission
         $role = $employee?->role ?? (string) env('BOOKING_API_ROLE', 'Teknisk ansvarlig / Ejer');
         // AI-assistenten er en fast basisfunktion for interne brugere. De øvrige
         // rettigheder starter med rollens standarder og kan derefter overriden.
-        if ($permission === 'ai.use') {
+        if ($role === 'Teknisk ansvarlig / Ejer') {
+            // The owner must never be locked out by stale per-employee overrides.
+            $allowed = true;
+        } elseif ($permission === 'ai.use') {
             $allowed = true;
         } else {
             $allowed = in_array($permission, self::rolePermissions($role), true);
