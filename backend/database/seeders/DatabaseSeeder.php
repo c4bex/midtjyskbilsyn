@@ -46,9 +46,18 @@ class DatabaseSeeder extends Seeder
                 ]);
             } else {
                 $ownerEmployeeId = $ownerEmployee->id;
-                if (! $ownerEmployee->user_id) {
-                    DB::table('employees')->where('id', $ownerEmployeeId)->update(['user_id' => $admin->id, 'updated_at' => now()]);
-                }
+                // SEED_ADMIN_* is the deployment's authoritative owner account.
+                // Repair both the account link and the role after migrations so a
+                // stale employee record can never lock the owner out of navigation.
+                DB::table('employees')->where('id', $ownerEmployeeId)->update([
+                    'user_id' => $admin->id,
+                    'email' => $adminEmail,
+                    'role' => 'Teknisk ansvarlig / Ejer',
+                    'job_title' => 'Teknisk ansvarlig / Ejer',
+                    'status' => 'ACTIVE',
+                    'active' => true,
+                    'updated_at' => now(),
+                ]);
             }
         }
 

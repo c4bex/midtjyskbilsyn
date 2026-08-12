@@ -30,6 +30,45 @@ class OperationsApiTest extends TestCase
         }
     }
 
+    public function test_seeder_repairs_stale_owner_employee_link_and_role(): void
+    {
+        $owner = User::factory()->create([
+            'name' => 'Rasmus',
+            'email' => 'owner@example.test',
+            'password' => bcrypt('unchanged-password'),
+        ]);
+        $staleEmployeeId = DB::table('employees')->insertGetId([
+            'user_id' => null,
+            'display_name' => 'Rasmus',
+            'email' => 'owner@example.test',
+            'role' => 'Begrænset adgang',
+            'job_title' => 'Medarbejder',
+            'status' => 'INACTIVE',
+            'active' => false,
+            'booking_capacity' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        config()->set('app.seed_admin_email', 'owner@example.test');
+        config()->set('app.seed_admin_password', 'deployment-password');
+        config()->set('app.seed_admin_name', 'Rasmus');
+
+        $this->seed();
+
+        $this->assertDatabaseHas('employees', [
+            'id' => $staleEmployeeId,
+            'user_id' => $owner->id,
+            'role' => 'Teknisk ansvarlig / Ejer',
+            'job_title' => 'Teknisk ansvarlig / Ejer',
+            'status' => 'ACTIVE',
+            'active' => true,
+        ]);
+        $this->actingAs($owner)->getJson('/api/session')
+            ->assertOk()
+            ->assertJsonPath('employee.role', 'Teknisk ansvarlig / Ejer')
+            ->assertJsonCount(count(Permission::catalog()), 'permissions');
+    }
+
     public function test_unauthenticated_requests_are_rejected(): void
     {
         $this->getJson('/api/bookings?date=2026-08-04')->assertUnauthorized();
