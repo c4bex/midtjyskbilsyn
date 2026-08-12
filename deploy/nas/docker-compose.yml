@@ -50,7 +50,9 @@ x-api-environment: &api-environment
 x-api-service: &api-service
   # Web og API bygges og testes samlet i GitHub Actions. NAS'en henter præcis
   # den godkendte udgave og behøver derfor hverken kildekode eller build-værktøjer.
-  image: ${API_IMAGE:-ghcr.io/c4bex/midtjyskbilsyn-api:test}
+  # Testmiljøet følger altid den godkendte GHCR-udgave. Et historisk
+  # API_IMAGE-felt i NAS'ens .env må ikke kunne fastholde en gammel lokal build.
+  image: ghcr.io/c4bex/midtjyskbilsyn-api:test
   pull_policy: always
   restart: unless-stopped
   environment: *api-environment
@@ -116,7 +118,7 @@ services:
     # image ved designændringer i stedet for at installere og bygge Node lokalt.
     # Testmiljøet skal altid hente den udgivne build fra GHCR.
     # Et lokalt image-tag kan ellers fastholde en ældre frontend-build.
-    image: ${WEB_IMAGE:-ghcr.io/c4bex/midtjyskbilsyn-web:test}
+    image: ghcr.io/c4bex/midtjyskbilsyn-web:test
     pull_policy: always
     restart: unless-stopped
     environment:
