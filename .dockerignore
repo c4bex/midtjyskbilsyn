@@ -5,7 +5,7 @@ node_modules
 .wrangler
 backend/.env*
 backend/vendor
-backend/storage/logs/*
+backend/storage
 deploy/nas/runtime
 deploy/nas/backups
 **/.DS_Store
