@@ -381,10 +381,15 @@ class OperationsApiTest extends TestCase
 
     public function test_employee_endpoint_returns_authoritative_capacity_and_permissions(): void
     {
-        $response = $this->actingAs($this->user)->getJson('/api/employees')->assertOk();
-        $response->assertJsonPath('capacitySummary.today.concurrentCapacity', 1)
-            ->assertJsonPath('employees.0.permissions.0', 'bookings.read');
-        $this->assertNotEmpty($response->json('permissionCatalog'));
+        CarbonImmutable::setTestNow('2026-08-12 10:00:00');
+        try {
+            $response = $this->actingAs($this->user)->getJson('/api/employees')->assertOk();
+            $response->assertJsonPath('capacitySummary.today.concurrentCapacity', 1)
+                ->assertJsonPath('employees.0.permissions.0', 'bookings.read');
+            $this->assertNotEmpty($response->json('permissionCatalog'));
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
     }
 
     public function test_toldsyn_reserves_two_adjacent_booking_slots_as_one_booking(): void
