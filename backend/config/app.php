@@ -54,6 +54,18 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    'frontend_url' => env('FRONTEND_URL', 'http://localhost:4317'),
+
+    'trusted_frontend_hosts' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', (string) env('TRUSTED_FRONTEND_HOSTS', ''))
+    ))),
+
+    'seed_admin_email' => env('SEED_ADMIN_EMAIL'),
+    'seed_admin_password' => env('SEED_ADMIN_PASSWORD'),
+    'seed_admin_name' => env('SEED_ADMIN_NAME', 'Administrator'),
+    'seed_demo_data' => (bool) env('SEED_DEMO_DATA', false),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone
@@ -65,7 +77,7 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    'timezone' => env('APP_TIMEZONE', 'Europe/Copenhagen'),
 
     /*
     |--------------------------------------------------------------------------

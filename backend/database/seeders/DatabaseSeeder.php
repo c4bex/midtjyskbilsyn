@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-use App\Http\Middleware\Permission;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -18,46 +17,77 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $adminEmail = env('SEED_ADMIN_EMAIL');
-        $adminPassword = env('SEED_ADMIN_PASSWORD');
+        $adminEmail = config('app.seed_admin_email');
+        $adminPassword = config('app.seed_admin_password');
+        $adminName = trim((string) config('app.seed_admin_name', 'Administrator')) ?: 'Administrator';
         $admin = null;
         if ($adminEmail && $adminPassword) {
-            $admin = User::updateOrCreate(['email' => $adminEmail], [
-                'name' => 'Rasmus Havn Mouritzen',
+            // Deployment runs the seeder after every migration. Existing accounts
+            // must therefore never have their password reset by a deployment.
+            $admin = User::firstOrCreate(['email' => $adminEmail], [
+                'name' => $adminName,
                 'password' => bcrypt($adminPassword),
             ]);
         }
 
-        foreach ([
-            ['Peter Hartz Jensen', 'Synsinspektør'],
-            ['Rasmus Havn Mouritzen', 'Teknisk ansvarlig / Ejer'],
-            ['Pernille Havn Mouritzen', 'Bogholder / blæksprut'],
-        ] as [$name, $role]) {
-            $nameParts = collect(preg_split('/\s+/', $name))->filter()->values();
-            $initials = mb_strtoupper(mb_substr($nameParts->first(), 0, 1).mb_substr($nameParts->last(), 0, 1));
-            DB::table('employees')->updateOrInsert(['display_name' => $name], ['user_id' => $name === 'Rasmus Havn Mouritzen' ? $admin?->id : null, 'initials' => $initials, 'job_title' => $role, 'role' => $role, 'status' => 'ACTIVE', 'active' => true, 'booking_capacity' => in_array($role, ['Synsinspektør', 'Teknisk ansvarlig / Ejer'], true), 'updated_at' => now(), 'created_at' => now()]);
-        }
-
-        // Rasmus is the test-system owner. Keep an explicit full permission set
-        // so older permission overrides cannot accidentally hide the modules.
-        if ($admin && Schema::hasTable('employee_permissions')) {
-            $ownerEmployeeId = DB::table('employees')->where('user_id', $admin->id)->value('id');
-            if ($ownerEmployeeId) {
-                $now = now();
-                foreach (array_keys(Permission::catalog()) as $permissionKey) {
-                    DB::table('employee_permissions')->updateOrInsert(
-                        ['employee_id' => $ownerEmployeeId, 'permission_key' => $permissionKey],
-                        ['allowed' => true, 'created_at' => $now, 'updated_at' => $now],
-                    );
+        if ($admin && Schema::hasTable('employees')) {
+            $ownerEmployee = DB::table('employees')->where('user_id', $admin->id)->first()
+                ?? DB::table('employees')->where('email', $adminEmail)->first()
+                ?? DB::table('employees')->where('display_name', $adminName)->first();
+            if (! $ownerEmployee) {
+                $nameParts = collect(preg_split('/\s+/', $adminName))->filter()->values();
+                $initials = mb_strtoupper(mb_substr((string) $nameParts->first(), 0, 1).mb_substr((string) $nameParts->last(), 0, 1));
+                $ownerEmployeeId = DB::table('employees')->insertGetId([
+                    'user_id' => $admin->id, 'display_name' => $adminName, 'initials' => $initials,
+                    'email' => $adminEmail, 'job_title' => 'Teknisk ansvarlig / Ejer',
+                    'role' => 'Teknisk ansvarlig / Ejer', 'status' => 'ACTIVE',
+                    'active' => true, 'booking_capacity' => true,
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+            } else {
+                $ownerEmployeeId = $ownerEmployee->id;
+                if (! $ownerEmployee->user_id) {
+                    DB::table('employees')->where('id', $ownerEmployeeId)->update(['user_id' => $admin->id, 'updated_at' => now()]);
                 }
             }
         }
 
-        if (Schema::hasTable('departments') && Schema::hasTable('employee_departments')) {
+        if (isset($ownerEmployeeId) && Schema::hasTable('departments') && Schema::hasTable('employee_departments')) {
             $ikast = DB::table('departments')->where('name', 'Ikast')->value('id');
-            if ($ikast) {
-                DB::table('employees')->get()->each(fn ($employee) => DB::table('employee_departments')->updateOrInsert(['employee_id' => $employee->id, 'department_id' => $ikast], ['is_primary' => true, 'created_at' => now(), 'updated_at' => now()]));
+            if ($ikast && ! DB::table('employee_departments')->where('employee_id', $ownerEmployeeId)->where('department_id', $ikast)->exists()) {
+                DB::table('employee_departments')->insert(['employee_id' => $ownerEmployeeId, 'department_id' => $ikast, 'is_primary' => true, 'created_at' => now(), 'updated_at' => now()]);
             }
+        }
+
+        // Safe first-run defaults. Existing operational settings are never
+        // overwritten when the deployment runs this seeder again.
+        foreach ([
+            [1, '08:00', '16:00'], [2, '08:00', '16:00'], [3, '08:00', '16:00'],
+            [4, '08:00', '16:00'], [5, '08:00', '15:40'],
+        ] as [$weekday, $start, $end]) {
+            if (! DB::table('availability_rules')->where('kind', 'opening_hours')->where('weekday', $weekday)->exists()) {
+                DB::table('availability_rules')->insert(['kind' => 'opening_hours', 'weekday' => $weekday, 'starts_at' => $start, 'ends_at' => $end, 'label' => 'Normal åbningstid', 'created_at' => now(), 'updated_at' => now()]);
+            }
+        }
+        foreach ([6, 7] as $weekday) {
+            if (! DB::table('availability_rules')->where('kind', 'closed_day')->where('weekday', $weekday)->exists()) {
+                DB::table('availability_rules')->insert(['kind' => 'closed_day', 'weekday' => $weekday, 'label' => 'Fast lukkedag', 'created_at' => now(), 'updated_at' => now()]);
+            }
+        }
+
+        if (isset($ownerEmployeeId)) {
+            foreach (range(1, 5) as $weekday) {
+                if (! DB::table('employee_work_rules')->where('employee_id', $ownerEmployeeId)->where('weekday', $weekday)->exists()) {
+                    $opening = DB::table('availability_rules')->where('kind', 'opening_hours')->where('weekday', $weekday)->first();
+                    if ($opening) {
+                        DB::table('employee_work_rules')->insert(['employee_id' => $ownerEmployeeId, 'weekday' => $weekday, 'starts_at' => $opening->starts_at, 'ends_at' => $opening->ends_at, 'working' => true, 'created_at' => now(), 'updated_at' => now()]);
+                    }
+                }
+            }
+        }
+
+        if (! config('app.seed_demo_data', false)) {
+            return;
         }
 
         $private = DB::table('customers')->updateOrInsert(
@@ -111,7 +141,9 @@ class DatabaseSeeder extends Seeder
         foreach ($capacityEmployees as $employeeId) {
             foreach (range(1, 5) as $weekday) {
                 $opening = DB::table('availability_rules')->where('kind', 'opening_hours')->where('weekday', $weekday)->first();
-                if (!$opening) continue;
+                if (! $opening) {
+                    continue;
+                }
                 DB::table('employee_work_rules')->updateOrInsert(
                     ['employee_id' => $employeeId, 'weekday' => $weekday],
                     ['starts_at' => $opening->starts_at, 'ends_at' => $opening->ends_at, 'working' => true, 'created_at' => now(), 'updated_at' => now()],

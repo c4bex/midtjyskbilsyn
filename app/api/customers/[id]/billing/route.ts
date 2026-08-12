@@ -1,3 +1,6 @@
 import { proxyLaravel } from "../../../../../lib/laravel-api";
 
-export const PATCH = (request: Request, context: { params: { id: string } }) => proxyLaravel(request, `/api/customers/${context.params.id}/billing`);
+export const PATCH = async (request: Request, context: { params: Promise<{ id: string }> }) => {
+  const { id } = await context.params;
+  return proxyLaravel(request, `/api/customers/${id}/billing`);
+};

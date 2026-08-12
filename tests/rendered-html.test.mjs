@@ -120,6 +120,19 @@ test("integrationsadaptere er deaktiverede som standard", async () => {
   await assert.rejects(() => gatewayApiAdapter.execute({ idempotencyKey: "sms:demo-1", correlationId: "test-1", payload: { recipient: "+4520123456", message: "Test", sender: "MB Bilsyn" } }), /ikke aktiveret/i);
 });
 
+test("interne API-kald bruger kun den indloggede session", async () => {
+  const proxy = await readFile(new URL("../lib/laravel-api.ts", import.meta.url), "utf8");
+  assert.match(proxy, /headers\.set\("cookie", cookie\)/);
+  assert.doesNotMatch(proxy, /BOOKING_API_TOKEN|authorization/i);
+});
+
+test("udrulning overskriver ikke en eksisterende administrator", async () => {
+  const seeder = await readFile(new URL("../backend/database/seeders/DatabaseSeeder.php", import.meta.url), "utf8");
+  assert.match(seeder, /User::firstOrCreate/);
+  assert.doesNotMatch(seeder, /User::updateOrCreate/);
+  assert.match(seeder, /SEED_DEMO_DATA|seed_demo_data/);
+});
+
 test("DMR-opslag normaliserer nummerplader og bruges som fallback efter MySQL", async () => {
   const { normalizeDmrRegistration } = await import("../lib/integrations/adapters/dmr.ts");
   const [route, service, controller] = await Promise.all([

@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\ApiToken;
+use App\Http\Middleware\Permission;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -13,7 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->alias(['api.token' => \App\Http\Middleware\ApiToken::class, 'permission' => \App\Http\Middleware\Permission::class]);
+        $middleware->alias(['api.token' => ApiToken::class, 'permission' => Permission::class]);
         $middleware->validateCsrfTokens(except: ['api/*']);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

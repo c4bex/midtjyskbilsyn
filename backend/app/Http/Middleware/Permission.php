@@ -28,6 +28,9 @@ class Permission
             'employees.access.write' => ['label' => 'Administrere systemadgang', 'group' => 'Administration'],
             'employees.permissions.write' => ['label' => 'Ændre roller og rettigheder', 'group' => 'Administration'],
             'settings.write' => ['label' => 'Ændre åbningstider og systemindstillinger', 'group' => 'Administration'],
+            'capacity.buffer.use' => ['label' => 'Booke internt i buffertider', 'group' => 'Kapacitetsplanlægning'],
+            'capacity.buffer.release' => ['label' => 'Åbne buffertider for kunder', 'group' => 'Kapacitetsplanlægning'],
+            'capacity.manage' => ['label' => 'Administrere profiler, buffere og overrides', 'group' => 'Kapacitetsplanlægning'],
             'audit.read' => ['label' => 'Se revisionshistorik', 'group' => 'Administration'],
             'ai.use' => ['label' => 'Bruge AI-assistenten', 'group' => 'AI-assistent'],
             'ai.documents.write' => ['label' => 'Administrere AI-dokumenter', 'group' => 'AI-assistent'],
@@ -41,22 +44,29 @@ class Permission
     {
         return match ($role) {
             'Teknisk ansvarlig / Ejer' => array_keys(self::catalog()),
-            'Synsinspektør' => ['bookings.read', 'bookings.write', 'customers.read', 'customers.write', 'employees.read', 'employees.absence.write', 'ai.use'],
+            'Synsinspektør' => ['bookings.read', 'bookings.write', 'customers.read', 'customers.write', 'employees.read', 'employees.absence.write', 'capacity.buffer.use', 'ai.use'],
             'Bogholder / blæksprut' => ['bookings.read', 'customers.read', 'invoices.read', 'invoices.write', 'imports.read', 'ai.use', 'ai.investigations.read', 'ai.investigations.write'],
-            'Administrator' => ['bookings.read', 'bookings.write', 'customers.read', 'customers.write', 'invoices.read', 'invoices.write', 'imports.read', 'imports.write', 'employees.read', 'employees.write', 'employees.schedule.write', 'employees.absence.write', 'employees.access.write', 'settings.write', 'audit.read', 'ai.use'],
+            'Administrator' => ['bookings.read', 'bookings.write', 'customers.read', 'customers.write', 'invoices.read', 'invoices.write', 'imports.read', 'imports.write', 'employees.read', 'employees.write', 'employees.schedule.write', 'employees.absence.write', 'employees.access.write', 'settings.write', 'capacity.buffer.use', 'capacity.buffer.release', 'capacity.manage', 'audit.read', 'ai.use'],
             default => [],
         };
     }
 
     public function handle(Request $request, Closure $next, string $permission)
     {
+        if (! self::allows($permission)) {
+            return response()->json(['error' => 'Mangler rettighed: '.$permission], 403);
+        }
+
+        return $next($request);
+    }
+
+    public static function allows(string $permission): bool
+    {
         $employee = Auth::check() ? DB::table('employees')->where('user_id', Auth::id())->first() : null;
-        $role = $employee?->role ?? (string) env('BOOKING_API_ROLE', 'Teknisk ansvarlig / Ejer');
-        $ownerEmail = (string) env('SEED_ADMIN_EMAIL', '');
+        $role = $employee?->role ?? (string) env('BOOKING_API_ROLE', '');
+        $ownerEmail = (string) config('app.seed_admin_email', '');
         $isOwner = $role === 'Teknisk ansvarlig / Ejer'
-            || ($ownerEmail !== '' && Auth::user()?->email === $ownerEmail)
-            // Testmiljøets faste testbruger skal ikke låses ude af moduler.
-            || Auth::user()?->email === 'test@test.dk';
+            || ($ownerEmail !== '' && Auth::user()?->email === $ownerEmail);
         // AI-assistenten er en fast basisfunktion for interne brugere. De øvrige
         // rettigheder starter med rollens standarder og kan derefter overriden.
         if ($isOwner) {
@@ -76,10 +86,7 @@ class Permission
                 }
             }
         }
-        if (! $allowed) {
-            return response()->json(['error' => 'Mangler rettighed: '.$permission], 403);
-        }
 
-        return $next($request);
+        return $allowed;
     }
 }

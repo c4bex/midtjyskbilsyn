@@ -16,16 +16,20 @@ export async function proxyLaravel(request: Request, path: string): Promise<Resp
   const contentType = request.headers.get("content-type");
   if (cookie) headers.set("cookie", cookie);
   if (contentType) headers.set("content-type", contentType);
-  if (process.env.BOOKING_API_TOKEN) headers.set("authorization", `Bearer ${process.env.BOOKING_API_TOKEN}`);
+  headers.set("x-public-origin", new URL(request.url).origin);
   const method = request.method.toUpperCase();
-  const response = await fetch(`${baseUrl()}${path}`, {
-    method,
-    headers,
-    body: method === "GET" || method === "HEAD" ? undefined : await request.arrayBuffer(),
-    redirect: "manual",
-    cache: "no-store",
-  });
-  const outgoing = new Headers({ "content-type": response.headers.get("content-type") ?? "application/json" });
-  copySetCookies(response.headers, outgoing);
-  return new Response(response.body, { status: response.status, headers: outgoing });
+  try {
+    const response = await fetch(`${baseUrl()}${path}`, {
+      method,
+      headers,
+      body: method === "GET" || method === "HEAD" ? undefined : await request.arrayBuffer(),
+      redirect: "manual",
+      cache: "no-store",
+    });
+    const outgoing = new Headers({ "content-type": response.headers.get("content-type") ?? "application/json" });
+    copySetCookies(response.headers, outgoing);
+    return new Response(response.body, { status: response.status, headers: outgoing });
+  } catch {
+    return Response.json({ error: "Bookingsystemet kan ikke kontaktes lige nu. Prøv igen om et øjeblik." }, { status: 503 });
+  }
 }

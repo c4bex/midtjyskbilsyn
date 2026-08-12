@@ -35,7 +35,7 @@ Køretøjsopslaget spørger den read-only DMR-adapter med fem sekunders timeout.
 
 ## Persondata og adgang
 
-Der gemmes kun visningsnavn og nødvendige kontaktkanaler; telefon og e-mail er modelleret som krypterede felter. CPR-numre, fødselsdatoer og fritekst med følsomme oplysninger hører ikke hjemme i systemet. Roller håndhæves server-side efter princippet om mindst mulige rettigheder. Alle mutationer skal audit-logges. Hemmeligheder må kun ligge i miljøets secret store, aldrig i kode, databaseudtræk, logs eller chat.
+Der gemmes kun visningsnavn og nødvendige kontaktkanaler. Telefon og e-mail ligger i den private driftsdatabase, mens SMS-køen kun gemmer hash og maskeret modtager; NAS-volumen og backups skal derfor være krypterede og adgangsbegrænsede. CPR-numre, fødselsdatoer og fritekst med følsomme oplysninger hører ikke hjemme i systemet. Roller håndhæves server-side efter princippet om mindst mulige rettigheder. Alle mutationer skal audit-logges. Hemmeligheder må kun ligge i miljøets secret store, aldrig i kode, databaseudtræk, logs eller chat.
 
 ## Kontrolleret overgang
 

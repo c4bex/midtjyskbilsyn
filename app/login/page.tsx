@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowRight,
   BarChart3,
@@ -69,7 +70,7 @@ export default function LoginPage() {
     <main className="login-page">
       <section className="login-hero" aria-label="Om Midtjysk Bilsyn">
         <Link className="login-brand" href="/" aria-label="Midtjysk Bilsyn – forsiden">
-          <img src="/midtjysk-bilsyn-logo.png" alt="Midtjysk Bilsyn" />
+          <Image src="/midtjysk-bilsyn-logo.png" alt="Midtjysk Bilsyn" width={253} height={84} priority unoptimized />
         </Link>
         <div className="login-hero-copy">
           <h1>Velkommen til<br /><span>platformen</span></h1>
@@ -89,7 +90,7 @@ export default function LoginPage() {
 
       <section className="login-panel">
         <form className="login-card" onSubmit={forgotMode ? submitForgot : submit}>
-          <div className="login-card-brand"><img src="/midtjysk-bilsyn-logo.png" alt="Midtjysk Bilsyn" /></div>
+          <div className="login-card-brand"><Image src="/midtjysk-bilsyn-logo.png" alt="Midtjysk Bilsyn" width={253} height={84} priority unoptimized /></div>
           <h2>Log ind</h2>
           <p className="login-card-intro">{forgotMode ? "Indtast din e-mail, så sender vi et sikkert nulstillingslink." : "Log ind for at fortsætte"}</p>
 
