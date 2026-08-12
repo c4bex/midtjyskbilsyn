@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AlertTriangle,
   Bell,
   Building2,
   CalendarDays,
@@ -53,10 +54,23 @@ type Booking = {
 
 type CustomerOption = { id: string; name: string; customerType: CustomerType; vehicles: Array<{ id: string; plate: string; vehicle: string }> };
 type VehicleLookup = { found: boolean; source: string; vehicle?: { registration: string; make: string | null; model: string | null; inspectionDate?: string | null; nextInspectionDate?: string | null }; customer?: { name: string; customerType: CustomerType }; lastInspectionDate?: string | null; inspectionDueDate?: string | null; dmr?: { enabled: boolean; status: string } };
-type WeekDay = { date: string; weekday: number; closed: boolean; totalSlots: number; bookedSlots: number; availableCapacity?: number; availableSlots: string[]; staffedInspectors?: number };
+type WeekDay = { date: string; weekday: number; closed: boolean; totalSlots: number; bookedSlots: number; availableCapacity?: number; availableSlots: string[]; staffedInspectors?: number; bufferCount?: number };
 type SmsTemplate = "booking_confirmation" | "booking_reminder" | "booking_changed" | "booking_cancelled";
 type InspectionType = { id: number; name: string; required_slots: number; is_active: boolean };
+type CapacitySlot = { time: string; visualType: string; publicState: string; internalState: string; sourceLabel?: string; canBookInternally: boolean; bookedCount?: number; internalCapacity?: number };
 type SearchResult = { type: "booking" | "customer" | "vehicle"; id: string; title: string; subtitle: string; booking?: Booking };
+type SystemNotification = {
+  id: string;
+  category: "booking" | "sms" | "invoice" | "system";
+  severity: "info" | "success" | "warning" | "error";
+  title: string;
+  message: string;
+  actionView?: string | null;
+  actionLabel?: string | null;
+  actionData?: { date?: string } | null;
+  occurredAt: string;
+  read: boolean;
+};
 type SessionData = {
   authenticated: boolean;
   user?: { id?: string; name?: string; email?: string } | null;
@@ -67,7 +81,7 @@ type SessionData = {
 const nav = [
   { id: "bookings", label: "Bookinger", icon: CalendarDays },
   { id: "customers", label: "Kunder", icon: Users },
-  { id: "invoices", label: "Fakturering", icon: FileText, badge: "4" },
+  { id: "invoices", label: "Fakturering", icon: FileText },
 ];
 
 const administrationNav = [
@@ -76,20 +90,6 @@ const administrationNav = [
   { id: "portal", label: "Branchekundeportal", icon: Building2 },
   { id: "drift", label: "Drift", icon: CheckCircle2 },
   { id: "sms", label: "Indstillinger", icon: Settings },
-];
-
-const initialBookings: Booking[] = [
-  { id: "demo-booking-1", date: "2026-08-04", time: "08:00", customer: "Jysk VVS ApS", customerType: "business", plate: "CF 45 821", vehicle: "Ford Transit", inspection: "Periodisk syn", status: "completed" },
-  { id: "demo-booking-2", date: "2026-08-04", time: "08:20", customer: "Maja Holm", customerType: "private", plate: "AB 12 345", vehicle: "VW Golf", inspection: "Periodisk syn", status: "completed" },
-  { id: "demo-booking-3", date: "2026-08-04", time: "08:40", customer: "Thomas Dahl", customerType: "private", plate: "DL 76 119", vehicle: "Tesla Model 3", inspection: "Omsyn", status: "arrived" },
-  { id: "demo-booking-5", date: "2026-08-04", time: "09:20", customer: "Anne Skov", customerType: "private", plate: "EH 22 604", vehicle: "Peugeot 208", inspection: "Periodisk syn", status: "confirmed" },
-  { id: "demo-booking-6", date: "2026-08-04", time: "09:40", customer: "Murerfirma Lund", customerType: "business", plate: "FA 91 037", vehicle: "Mercedes Sprinter", inspection: "Varebilssyn", status: "confirmed" },
-  { id: "demo-booking-7", date: "2026-08-04", time: "10:00", customer: "Søren Bech", customerType: "private", plate: "GB 18 530", vehicle: "Skoda Enyaq", inspection: "Periodisk syn", status: "awaiting_confirmation" },
-  { id: "demo-booking-8", date: "2026-08-04", time: "10:20", customer: "Lone Madsen", customerType: "private", plate: "HR 63 044", vehicle: "Toyota Yaris", inspection: "Omsyn", status: "confirmed" },
-  { id: "demo-booking-9", date: "2026-08-04", time: "10:40", customer: "Fjord Transport", customerType: "business", plate: "JK 37 995", vehicle: "Iveco Daily", inspection: "Varebilssyn", status: "confirmed" },
-  { id: "demo-booking-10", date: "2026-08-04", time: "11:00", customer: "Emil Nygaard", customerType: "private", plate: "KT 40 188", vehicle: "Volvo XC40", inspection: "Periodisk syn", status: "confirmed" },
-  { id: "demo-booking-11", date: "2026-08-04", time: "11:40", customer: "Line Friis", customerType: "private", plate: "LP 88 271", vehicle: "Kia Niro", inspection: "Periodisk syn", status: "confirmed" },
-  { id: "demo-booking-12", date: "2026-08-04", time: "12:00", customer: "Niels Bak", customerType: "private", plate: "MR 51 620", vehicle: "Audi A4", inspection: "Omsyn", status: "confirmed" },
 ];
 
 const dayNames = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag", "Søndag"];
@@ -114,6 +114,7 @@ const monthGrid = (month: string) => {
   return Array.from({ length: 42 }, (_, index) => addDays(gridStart, index));
 };
 const formatDanishDate = (date: string | null | undefined) => date ? new Intl.DateTimeFormat("da-DK", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Copenhagen" }).format(new Date(date)) : "Ikke oplyst";
+const formatNotificationTime = (date: string) => new Intl.DateTimeFormat("da-DK", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Copenhagen" }).format(new Date(date));
 
 const statusText: Record<BookingStatus, string> = {
   confirmed: "Bekræftet",
@@ -130,13 +131,18 @@ export function Dashboard() {
   const [sessionPermissions, setSessionPermissions] = useState<string[]>([]);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [notifications, setNotifications] = useState<SystemNotification[]>([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
   const [activeView, setActiveView] = useState<"bookings" | "customers" | "availability" | "sms" | "invoices" | "employees" | "portal" | "drift">("bookings");
   const [filter, setFilter] = useState<"alle" | CustomerType>("alle");
   const [modalOpen, setModalOpen] = useState(false);
   const [notice, setNotice] = useState("");
-  const [bookings, setBookings] = useState(initialBookings);
-  const [availableSlots, setAvailableSlots] = useState(["11:20", "14:20"]);
-  const [modalSlots, setModalSlots] = useState(["11:20", "14:20"]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [availableSlots, setAvailableSlots] = useState<string[]>([]);
+  const [modalSlots, setModalSlots] = useState<string[]>([]);
+  const [bookingLoadError, setBookingLoadError] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -145,6 +151,7 @@ export function Dashboard() {
   const [vehicleLookup, setVehicleLookup] = useState<VehicleLookup | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [slotsLoading, setSlotsLoading] = useState(false);
+  const [capacitySlots, setCapacitySlots] = useState<CapacitySlot[]>([]);
   const [smsTemplate, setSmsTemplate] = useState<SmsTemplate>("booking_confirmation");
   const [smsPhone, setSmsPhone] = useState("");
   const [weekStart, setWeekStart] = useState(() => startOfWeek(currentDate));
@@ -152,20 +159,19 @@ export function Dashboard() {
   const [weekNumber, setWeekNumber] = useState(() => isoWeek(currentDate));
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(currentDate.slice(0, 7));
-  const [weekDays, setWeekDays] = useState<WeekDay[]>([
-    { date: "2026-08-03", weekday: 1, closed: false, totalSlots: 23, bookedSlots: 0, availableSlots: [] },
-    { date: "2026-08-04", weekday: 2, closed: false, totalSlots: 23, bookedSlots: 21, availableSlots: ["11:20", "14:20"] },
-  ]);
+  const [weekDays, setWeekDays] = useState<WeekDay[]>([]);
   const [weekLoading, setWeekLoading] = useState(true);
+  const [weekRevision, setWeekRevision] = useState(0);
   const [inspectionTypes, setInspectionTypes] = useState<InspectionType[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  const visibleNav = nav.filter((item) => item.id === "bookings" ? sessionPermissions.includes("bookings.read") : sessionPermissions.includes("customers.read"));
+  const navigationPermission: Record<string, string> = { bookings: "bookings.read", customers: "customers.read", invoices: "invoices.read" };
+  const visibleNav = nav.filter((item) => sessionPermissions.includes(navigationPermission[item.id]));
   const visibleAdministrationNav = administrationNav.filter((item) => {
     if (item.id === "employees") return sessionPermissions.includes("employees.read") || sessionPermissions.includes("employees.write");
-    if (item.id === "availability") return sessionPermissions.includes("settings.write");
+    if (item.id === "availability") return sessionPermissions.includes("settings.write") || sessionPermissions.includes("capacity.manage");
     if (item.id === "portal") return sessionPermissions.includes("settings.write");
     if (item.id === "sms") return sessionPermissions.includes("settings.write");
     return sessionPermissions.includes("employees.write") || sessionPermissions.includes("settings.write");
@@ -176,6 +182,8 @@ export function Dashboard() {
   const businessCount = bookings.length - privateCount;
   const matchingBusinesses = customerOptions.filter((customer) => customer.customerType === "business" && `${customer.name} ${customer.vehicles.map((vehicle) => vehicle.plate).join(" ")}`.toLowerCase().includes(businessQuery.toLowerCase())).slice(0, 6);
   const timeChoices = [...new Set([...(selectedBooking && form.time ? [form.time] : []), ...modalSlots])];
+  const selectedCapacitySlot = capacitySlots.find((slot) => slot.time === form.time);
+  const selectedSlotIsBuffer = Boolean(selectedCapacitySlot && selectedCapacitySlot.visualType.includes("BUFFER"));
   const smsTemplates: Record<SmsTemplate, { label: string; text: string }> = {
     booking_confirmation: { label: "Bookingbekræftelse", text: `Hej ${form.customer || "kunde"}. Din tid hos Midtjysk Bilsyn er ${form.date} kl. ${form.time || "--:--"}. Svar gerne på denne SMS ved spørgsmål.` },
     booking_reminder: { label: "Påmindelse", text: `Påmindelse: Du har tid hos Midtjysk Bilsyn ${form.date} kl. ${form.time || "--:--"}. Husk registreringsnummeret på bilen.` },
@@ -194,8 +202,7 @@ export function Dashboard() {
 
   useEffect(() => {
     fetch("/api/auth/session", { cache: "no-store" }).then((response) => response.ok ? response.json() as Promise<SessionData> : Promise.reject()).then((data) => {
-      const owner = data.employee?.role === "Teknisk ansvarlig / Ejer" || /rasmus/i.test(data.user?.name ?? "");
-      setSessionPermissions(owner ? ["bookings.read", "bookings.write", "customers.read", "customers.write", "invoices.read", "invoices.write", "invoices.approve", "imports.read", "imports.write", "employees.read", "employees.write", "employees.schedule.write", "employees.absence.write", "employees.access.write", "employees.permissions.write", "settings.write", "audit.read", "ai.use", "ai.documents.write", "ai.investigations.read", "ai.investigations.write", "ai.arvo.send"] : (data.permissions ?? []));
+      setSessionPermissions(data.permissions ?? []);
     }).catch(() => setSessionPermissions(["bookings.read", "customers.read"]));
   }, []);
 
@@ -222,17 +229,73 @@ export function Dashboard() {
     setMenuOpen(false);
     setSecondaryMenuOpen(false);
     setModalOpen(false);
+    setNotificationOpen(false);
+  };
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      const response = await fetch("/api/notifications", { cache: "no-store" });
+      if (!response.ok) throw new Error();
+      const data = await response.json() as { notifications: SystemNotification[]; unreadCount: number };
+      setNotifications(data.notifications);
+      setUnreadNotifications(data.unreadCount);
+    } catch {
+      // Klokken må ikke forstyrre resten af systemet, hvis driftscenteret kortvarigt er utilgængeligt.
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const initial = window.setTimeout(() => void loadNotifications(), 0);
+    const timer = window.setInterval(() => void loadNotifications(), 60000);
+    const refresh = () => { if (document.visibilityState === "visible") void loadNotifications(); };
+    document.addEventListener("visibilitychange", refresh);
+    return () => { window.clearTimeout(initial); window.clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
+  }, [loadNotifications]);
+
+  const updateNotificationState = async (notification: SystemNotification, action: "read" | "unread" | "dismiss") => {
+    const response = await fetch(`/api/notifications/${notification.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action }) });
+    if (!response.ok) { flash("Beskeden kunne ikke opdateres"); return; }
+    if (action === "dismiss") {
+      setNotifications((current) => current.filter((item) => item.id !== notification.id));
+      if (!notification.read) setUnreadNotifications((count) => Math.max(0, count - 1));
+      return;
+    }
+    setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, read: action === "read" } : item));
+    setUnreadNotifications((count) => Math.max(0, count + (action === "read" && !notification.read ? -1 : action === "unread" && notification.read ? 1 : 0)));
+  };
+
+  const openSystemNotification = async (notification: SystemNotification) => {
+    if (!notification.read) await updateNotificationState(notification, "read");
+    if (notification.actionData?.date) {
+      setSelectedDate(notification.actionData.date);
+      setWeekStart(startOfWeek(notification.actionData.date));
+    }
+    if (notification.actionView) navigate(notification.actionView);
+  };
+
+  const markAllNotificationsRead = async () => {
+    const response = await fetch("/api/notifications/read-all", { method: "POST" });
+    if (!response.ok) { flash("Beskederne kunne ikke markeres som læst"); return; }
+    setNotifications((current) => current.map((item) => ({ ...item, read: true })));
+    setUnreadNotifications(0);
   };
 
   const reloadBookings = async (date = selectedDate) => {
     try {
       const response = await fetch(`/api/bookings?date=${encodeURIComponent(date)}`, { cache: "no-store" });
       if (!response.ok) throw new Error("Kunne ikke hente bookinger");
-      const data = await response.json() as { bookings: Booking[]; availableSlots: string[] };
+      const data = await response.json() as { bookings: Booking[]; availableSlots: string[]; capacityPlannerV2?: { slots?: CapacitySlot[] } };
       setBookings(data.bookings);
       setAvailableSlots(data.availableSlots);
+      setCapacitySlots(data.capacityPlannerV2?.slots ?? []);
+      setBookingLoadError(false);
     } catch {
-      flash("Kunne ikke hente databasen — viser seneste lokale oversigt");
+      setBookings([]);
+      setAvailableSlots([]);
+      setBookingLoadError(true);
+      flash("Bookingerne kunne ikke hentes");
     }
   };
 
@@ -241,16 +304,21 @@ export function Dashboard() {
     fetch(`/api/bookings?date=${encodeURIComponent(selectedDate)}`, { cache: "no-store" })
       .then((response) => {
         if (!response.ok) throw new Error("Kunne ikke hente bookinger");
-        return response.json() as Promise<{ bookings: Booking[]; availableSlots: string[] }>;
+        return response.json() as Promise<{ bookings: Booking[]; availableSlots: string[]; capacityPlannerV2?: { slots?: CapacitySlot[] } }>;
       })
       .then((data) => {
         if (!active) return;
         setBookings(data.bookings);
         setAvailableSlots(data.availableSlots);
+        setCapacitySlots(data.capacityPlannerV2?.slots ?? []);
+        setBookingLoadError(false);
       })
       .catch(() => {
         if (!active) return;
-        setNotice("Kunne ikke hente databasen — viser seneste lokale oversigt");
+        setBookings([]);
+        setAvailableSlots([]);
+        setBookingLoadError(true);
+        setNotice("Bookingerne kunne ikke hentes");
         window.setTimeout(() => setNotice(""), 2600);
       });
     return () => { active = false; };
@@ -264,19 +332,20 @@ export function Dashboard() {
       .catch(() => { if (active) flash("Ugekapaciteten kunne ikke hentes"); })
       .finally(() => { if (active) setWeekLoading(false); });
     return () => { active = false; };
-  }, [flash, weekStart]);
+  }, [flash, weekStart, weekRevision]);
 
   useEffect(() => {
-    if (!modalOpen && !monthPickerOpen) return;
+    if (!modalOpen && !monthPickerOpen && !secondaryMenuOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setModalOpen(false);
         setMonthPickerOpen(false);
+        setSecondaryMenuOpen(false);
       }
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [modalOpen, monthPickerOpen]);
+  }, [modalOpen, monthPickerOpen, secondaryMenuOpen]);
 
   const changeWeek = (days: number) => {
     setWeekLoading(true);
@@ -284,7 +353,6 @@ export function Dashboard() {
   };
 
   const goToCurrentWeek = () => {
-    const currentDate = "2026-08-04";
     const currentWeekStart = startOfWeek(currentDate);
     setSelectedDate(currentDate);
     setCalendarMonth(currentDate.slice(0, 7));
@@ -316,9 +384,13 @@ export function Dashboard() {
     setSlotsLoading(true);
     try {
       const response = await fetch(`/api/bookings?date=${encodeURIComponent(date)}&inspection=${encodeURIComponent(inspection)}`, { cache: "no-store" });
-      const data = await response.json() as { availableSlots?: string[] };
-      if (response.ok) setModalSlots(data.availableSlots ?? []);
+      const data = await response.json() as { availableSlots?: string[]; capacityPlannerV2?: { slots?: CapacitySlot[] } };
+      if (response.ok) { setModalSlots(data.availableSlots ?? []); setCapacitySlots(data.capacityPlannerV2?.slots ?? []); }
     } finally { setSlotsLoading(false); }
+  };
+
+  const chooseTime = (time: string) => {
+    setForm((current) => ({ ...current, time }));
   };
 
   const lookupPlate = async (plate: string) => {
@@ -403,12 +475,13 @@ export function Dashboard() {
       const response = await fetch(selectedBooking ? `/api/bookings/${selectedBooking.id}` : "/api/bookings", {
         method: selectedBooking ? "PATCH" : "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...form, phone: smsPhone }),
+        body: JSON.stringify({ ...form, phone: smsPhone, bufferAction: selectedSlotIsBuffer ? "use" : undefined }),
       });
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error ?? "Bookingen kunne ikke gemmes");
       setModalOpen(false);
       await reloadBookings();
+      setWeekRevision((value) => value + 1);
       flash(selectedBooking ? "Bookingen er opdateret" : "Bookingen er oprettet");
     } catch (error) {
       flash(error instanceof Error ? error.message : "Bookingen kunne ikke gemmes");
@@ -427,6 +500,7 @@ export function Dashboard() {
       if (!response.ok) throw new Error("Bookingen kunne ikke aflyses");
       setModalOpen(false);
       await reloadBookings();
+      setWeekRevision((value) => value + 1);
       flash("Bookingen er aflyst, og tiden er ledig igen");
     } catch (error) {
       flash(error instanceof Error ? error.message : "Bookingen kunne ikke aflyses");
@@ -445,21 +519,40 @@ export function Dashboard() {
         <nav className="live-navigation" aria-label="Primær navigation">
           {visibleNav.map((item) => {
             const Icon = item.icon;
-            return <button key={item.id} className={activeView === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon size={16} strokeWidth={1.8} /><span>{item.label}</span>{"badge" in item && item.badge && <em>{item.badge}</em>}</button>;
+            return <button key={item.id} className={activeView === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon size={16} strokeWidth={1.8} /><span>{item.label}</span></button>;
           })}
-          {visibleAdministrationNav.length > 0 && <button className={`live-menu-trigger ${secondaryMenuOpen ? "active" : ""}`} onClick={() => setSecondaryMenuOpen((open) => !open)}><Menu size={16} strokeWidth={1.8} /><span>Menu</span><ChevronDown size={13} /></button>}
+          {visibleAdministrationNav.length > 0 && <button className={`live-menu-trigger ${secondaryMenuOpen ? "active" : ""}`} aria-controls="live-subnavigation" aria-expanded={secondaryMenuOpen} onClick={() => setSecondaryMenuOpen((open) => !open)}><Menu size={16} strokeWidth={1.8} /><span>Menu</span><ChevronDown size={13} /></button>}
         </nav>
         <div className="live-actions">
           <div className="global-search"><Search size={16} /><input value={searchQuery} onFocus={() => searchQuery.length >= 2 && setSearchOpen(true)} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Søg kunde, booking eller reg.nr." aria-label="Søg i systemet" />{searchOpen && <div className="global-search-results">{searchResults.length === 0 ? <span className="search-empty">Ingen resultater</span> : searchResults.map((result) => <button key={`${result.type}-${result.id}`} onClick={() => selectSearchResult(result)}><strong>{result.title}</strong><small>{result.subtitle}{result.type === "booking" ? " · Klik for at redigere" : ""}</small></button>)}</div>}</div>
           <span className="live-location">Ikast</span>
           <button className="ai-launch-button" aria-label="Åbn fagassistent" onClick={() => setAssistantOpen(true)}><Sparkles size={16} /><span>Fagassistent</span></button>
-          <button className="icon-button notification" aria-label="Notifikationer" onClick={() => flash("Du har 2 nye driftsbeskeder")}><Bell size={18} /><i /></button>
-          <button className="live-profile" aria-label="Profil" onClick={() => setProfileOpen((open) => !open)}><span>RM</span><b>Rasmus</b><ChevronDown size={14} /></button>
+          <div className="notification-center">
+            <button className={`icon-button notification ${unreadNotifications > 0 ? "has-unread" : ""}`} aria-label={unreadNotifications > 0 ? `${unreadNotifications} ulæste driftsbeskeder` : "Ingen ulæste driftsbeskeder"} aria-expanded={notificationOpen} aria-controls="notification-panel" onClick={() => { setNotificationOpen((open) => !open); setProfileOpen(false); }}><Bell size={18} />{unreadNotifications > 0 && <span className="notification-count">{unreadNotifications > 9 ? "9+" : unreadNotifications}</span>}</button>
+            {notificationOpen && <><button className="notification-scrim" aria-label="Luk driftsbeskeder" onClick={() => setNotificationOpen(false)} /><div id="notification-panel" className="notification-panel" role="dialog" aria-label="Driftsbeskeder">
+              <div className="notification-panel-head"><div><strong>Driftsbeskeder</strong><span>{unreadNotifications > 0 ? `${unreadNotifications} ulæst${unreadNotifications === 1 ? "" : "e"}` : "Alt er læst"}</span></div>{unreadNotifications > 0 && <button onClick={() => void markAllNotificationsRead()}><Check size={14} /> Markér alle som læst</button>}</div>
+              <div className="notification-list">
+                {notificationsLoading && <div className="notification-empty"><span className="notification-loader" /><strong>Henter driftsbeskeder</strong></div>}
+                {!notificationsLoading && notifications.length === 0 && <div className="notification-empty"><CheckCircle2 size={28} /><strong>Ingen nye driftsbeskeder</strong><span>Du får besked her, hvis noget kræver din opmærksomhed.</span></div>}
+                {notifications.map((item) => {
+                  const Icon = item.category === "sms" ? AlertTriangle : item.category === "invoice" ? FileText : CalendarDays;
+                  return <article key={item.id} className={`notification-item ${item.severity} ${item.read ? "read" : "unread"}`}>
+                    <button className="notification-content" onClick={() => void openSystemNotification(item)}>
+                      <span className="notification-kind"><Icon size={16} /></span>
+                      <span className="notification-copy"><strong>{item.title}</strong><span>{item.message}</span><small>{formatNotificationTime(item.occurredAt)}{item.actionLabel ? ` · ${item.actionLabel}` : ""}</small></span>
+                      {!item.read && <i aria-label="Ulæst" />}
+                    </button>
+                    <div className="notification-item-actions"><button onClick={() => void updateNotificationState(item, item.read ? "unread" : "read")}>{item.read ? "Markér som ulæst" : "Markér som læst"}</button><button aria-label="Fjern besked" title="Fjern besked" onClick={() => void updateNotificationState(item, "dismiss")}><X size={14} /></button></div>
+                  </article>;
+                })}
+              </div>
+            </div></>}
+          </div>
+          <button className="live-profile" aria-label="Profil" onClick={() => { setProfileOpen((open) => !open); setNotificationOpen(false); }}><span>RM</span><b>Rasmus</b><ChevronDown size={14} /></button>
           {profileOpen && <div className="live-profile-menu"><button onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}>Log ud</button></div>}
         </div>
+        {secondaryMenuOpen && visibleAdministrationNav.length > 0 && <nav id="live-subnavigation" className="live-subnavigation" aria-label="Flere funktioner">{visibleAdministrationNav.map((item) => { const Icon = item.icon; return <button key={item.id} className={activeView === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon size={15} strokeWidth={1.8} /><span>{item.label}</span></button>; })}</nav>}
       </header>
-
-      {secondaryMenuOpen && visibleAdministrationNav.length > 0 && <nav className="live-subnavigation" aria-label="Flere funktioner">{visibleAdministrationNav.map((item) => { const Icon = item.icon; return <button key={item.id} className={activeView === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon size={15} strokeWidth={1.8} /><span>{item.label}</span>{"badge" in item && item.badge && <em>{item.badge}</em>}</button>; })}</nav>}
 
       {menuOpen && <>
         <button className="scrim live-scrim" aria-label="Luk menu" onClick={() => setMenuOpen(false)} />
@@ -481,8 +574,10 @@ export function Dashboard() {
               <h1>Dagens bookinger</h1>
               <p>Hurtigt overblik over hvem og hvad der kommer i dag.</p>
             </div>
-            <div className="heading-actions"><div className="heading-stats"><span><strong>{bookings.length}</strong> bookinger</span><span><strong>{availableSlots.length}</strong> ledige</span></div><button className="primary-button" onClick={() => openCreate()}><Plus size={18} /> Ny booking</button></div>
+            <div className="heading-actions"><div className="heading-stats"><span><strong>{bookings.length}</strong> bookinger</span><span><strong>{availableSlots.length}</strong> ledige tidsrum</span></div><button className="primary-button" onClick={() => openCreate()} disabled={bookingLoadError}><Plus size={18} /> Ny booking</button></div>
           </section>
+
+          {bookingLoadError && <div className="module-error"><span>Bookingdata kunne ikke hentes. Der vises ingen lokale eksempeldata.</span><button onClick={() => void reloadBookings()}>Prøv igen</button></div>}
 
           <div className="day-layout">
             <div className="booking-column">
@@ -513,11 +608,11 @@ export function Dashboard() {
                 return <button key={day.date} disabled={weekLoading || day.closed} className={`${day.closed ? "closed" : available > 0 ? "available" : "full"} ${today ? "today" : ""} ${selectedDate === day.date ? "selected-day" : ""}`} onClick={() => selectDay(day)} aria-pressed={selectedDate === day.date}>
                   <span className="capacity-day-name">{dayNames[day.weekday - 1]}{today && <em>I dag</em>}</span>
                   <strong>{dayNumber(day.date)}</strong><small>{monthName(day.date)}</small>
-                  {day.closed ? <span className="capacity-status">Lukket</span> : <><span className="capacity-status"><b>{available}</b> ledige <small>· {day.staffedInspectors ?? 1} på planen</small></span><span className="capacity-bar"><i style={{ width: `${fullness}%` }} /></span></>}
+                  {day.closed ? <span className="capacity-status">Lukket</span> : <><span className="capacity-status"><b>{available}</b> ledige kundetider <small>· {day.bookedSlots} booket · {day.bufferCount ?? 0} buffer · {day.staffedInspectors ?? 0} på planen</small></span><span className="capacity-bar"><i style={{ width: `${fullness}%` }} /></span></>}
                 </button>;
               })}
             </div>
-            <div className="week-capacity-foot"><span><i className="green-dot" /> Klik på en grøn dag for at booke</span><span><i className="gray-dot" /> Lukket</span></div>
+            <div className="week-capacity-foot"><span><i className="green-dot" /> Almindelig kundetid</span><span><i className="yellow-dot" /> Intern buffer</span><span><i className="blue-dot" /> Ekstra intern plads</span><span><i className="gray-dot" /> Lukket</span></div>
           </section>
 
             <section className="booking-list-card">
@@ -557,7 +652,7 @@ export function Dashboard() {
               <section className="available-card">
                 <div className="aside-title"><span className="aside-icon"><Clock3 size={18} /></span><div><h2>Ledige tider</h2><p>{selectedDate === currentDate ? "I dag" : `${dayNumber(selectedDate)}. ${monthName(selectedDate)}`}</p></div></div>
                 <div className="available-times">
-                  {availableSlots.map((time) => <button key={time} onClick={() => openCreate(time)}>{time} <Plus size={15} /></button>)}
+                  {availableSlots.map((time) => { const slot = capacitySlots.find((item) => item.time === time); const buffer = slot?.visualType.includes("BUFFER"); const internalOnly = !buffer && slot?.publicState !== "OPEN" && slot?.internalState === "OPEN"; return <button className={buffer ? "buffer-time" : internalOnly ? "internal-time" : ""} key={time} onClick={() => openCreate(time)}><span>{time}{buffer && <small>BUFFER</small>}{internalOnly && <small>INTERN PLADS</small>}</span><Plus size={15} /></button>; })}
                   {availableSlots.length === 0 && <p className="no-slots">Ingen ledige tider</p>}
                 </div>
               </section>
@@ -614,9 +709,10 @@ export function Dashboard() {
                 </div>
                 <div className="slot-heading"><span>{slotsLoading ? "Henter ledige tider…" : `${modalSlots.length} ledige tider`}</span><small>{(inspectionTypes.find((type) => type.name === form.inspection)?.required_slots ?? 1) * 20} min. pr. booking</small></div>
                 <div className="booking-slots">
-                  {timeChoices.map((time) => <button className={form.time === time ? "selected" : ""} key={time} onClick={() => setForm({ ...form, time })}><Clock3 size={14} />{time}{form.time === time && <Check size={13} />}</button>)}
+                  {timeChoices.map((time) => { const buffer = capacitySlots.find((slot) => slot.time === time)?.visualType.includes("BUFFER"); return <button className={`${form.time === time ? "selected" : ""} ${buffer ? "buffer-slot" : ""}`} key={time} onClick={() => chooseTime(time)}><Clock3 size={14} />{time}{buffer && <small>Buffer</small>}{form.time === time && <Check size={13} />}</button>; })}
                   {!slotsLoading && timeChoices.length === 0 && <p>Ingen ledige tider denne dag.</p>}
                 </div>
+                {selectedSlotIsBuffer && <div className="buffer-booking-panel"><AlertTriangle size={17} /><div><strong>Du booker i en fast buffer kl. {form.time}</strong><p>{selectedCapacitySlot?.sourceLabel}. Bookingen bruger denne bufferplads, men de øvrige buffere bliver stående på deres faste klokkeslæt.</p></div></div>}
               </section>
             </div>
             <section className="sms-panel" aria-label="SMS til kunden">

@@ -1,4 +1,4 @@
-name: Udgiv web til NAS-test
+name: Udgiv system til NAS-test
 
 on:
   push:
@@ -20,6 +20,27 @@ jobs:
     steps:
       - name: Hent kode
         uses: actions/checkout@v4
+
+      - name: Klargør Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installer afhængigheder
+        run: npm ci
+
+      - name: Kør kodekontroller
+        run: |
+          npm run lint
+          npx tsc --noEmit
+          npm test
+
+      - name: Installer backend-afhængigheder
+        run: docker run --rm -v "$PWD/backend:/app" -w /app composer:2 install --no-interaction --prefer-dist
+
+      - name: Kør backend-tests
+        run: docker run --rm -v "$PWD/backend:/app" -w /app php:8.4-cli-alpine php vendor/bin/phpunit
 
       - name: Klargør Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -44,6 +65,22 @@ jobs:
           tags: |
             ghcr.io/c4bex/midtjyskbilsyn-web:test
             ghcr.io/c4bex/midtjyskbilsyn-web:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          labels: |
+            org.opencontainers.image.source=https://github.com/c4bex/midtjyskbilsyn
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Byg og udgiv API-image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/c4bex/midtjyskbilsyn-api:test
+            ghcr.io/c4bex/midtjyskbilsyn-api:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           labels: |

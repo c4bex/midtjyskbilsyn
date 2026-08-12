@@ -9,9 +9,8 @@ sikkerhedskopiering og ændrer ikke det aktive NAS-testmiljø.
 1. Kopiér hele repositoryet til en privat mappe på NAS'en.
 2. Kopiér `deploy/nas/.env.example` til `deploy/nas/.env` og erstat alle pladsholdere lokalt på NAS'en.
 3. Opret mapperne `${NAS_DATA_ROOT}/mysql` og `backups`.
-4. Kør `docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml pull web`.
-5. Kør `docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml up -d --build api migrate queue scheduler` ved første installation eller backendændringer.
-6. Start resten med `docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml up -d`.
+4. Kør `docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml pull web api migrate queue scheduler`.
+5. Start systemet og udfør eventuelle databasemigreringer med `docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml up -d`.
 7. Åbn `http://<NAS-Tailscale-IP>:4321`. Der må ikke oprettes port-forwarding i routeren.
 8. Restore-test: `docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml --profile maintenance run --rm restore-test`.
 
@@ -30,16 +29,17 @@ git push origin test-20260806-1530
 ```
 
 Kun et sådant test-tag (eller en bevidst manuel start af GitHub-workflowet)
-bygger `ghcr.io/c4bex/midtjyskbilsyn-web:test`. Når bygningen er godkendt,
-opdateres kun webcontaineren på NAS'en:
+bygger både `ghcr.io/c4bex/midtjyskbilsyn-web:test` og
+`ghcr.io/c4bex/midtjyskbilsyn-api:test`. Når bygningen er godkendt, opdateres
+hele systemet samlet på NAS'en:
 
 ```sh
-docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml pull web
-docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml up -d --no-deps web
+docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml pull web api migrate queue scheduler
+docker compose --env-file deploy/nas/.env -f deploy/nas/docker-compose.yml up -d
 ```
 
-MySQL, Laravel, DMR, køen og backup fortsætter uændret. En designopdatering
-medfører derfor ingen databasemigrering og ingen genstart af DMR.
+MySQL-data og backupvolumenerne bevares. Migrationsjobbet kører sikkert før API,
+kø og scheduler starter, så kode og database altid følger samme udgave.
 
 NAS-testlinket ændres dermed først, når ændringen både er godkendt, bygget og
 webcontaineren bevidst er opdateret.
@@ -50,7 +50,10 @@ webcontaineren bevidst er opdateret.
 - Kun Nginx-proxyen har en åben port. Laravel og MySQL er isoleret på Docker-netværket.
 - Login begrænses til fem forsøg pr. minut, mens API-kald begrænses til 120 pr. minut.
 - DMR-token, databasepasswords og applikationsnøgle må kun ligge i `deploy/nas/.env` på NAS'en.
-- Testmiljøets kendte admin-kode er bevidst `test`. Den skal erstattes af en stærk, hemmelig kode, før miljøet må bruges som produktion.
+- Administratorens startkode sættes kun i den private `.env`. Udrulninger ændrer aldrig adgangskoden på en eksisterende konto.
+- Password-mails kræver en rigtig SMTP-opsætning (`MAIL_*`). Standardværdien `MAIL_MAILER=log` sender ingen mail og er kun til test.
+- Ved offentlig HTTPS skal `APP_URL` og `FRONTEND_URL` være den offentlige `https://`-adresse, og `SESSION_SECURE_COOKIE` skal sættes til `true`.
+- `SEED_DEMO_DATA` skal være `false` ved lancering. Demodata kan kun aktiveres bevidst i et isoleret testmiljø.
 - Backup kører dagligt og gemmes i `${NAS_DATA_ROOT}/backups` i 14 dage som standard.
 - Kør en restore-test efter første installation og derefter mindst månedligt.
 

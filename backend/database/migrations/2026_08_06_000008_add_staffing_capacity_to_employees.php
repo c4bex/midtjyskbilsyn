@@ -5,7 +5,8 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::table('employees', function (Blueprint $table) {
@@ -23,7 +24,9 @@ return new class extends Migration {
                     ->where('kind', 'opening_hours')
                     ->where('weekday', $weekday)
                     ->first();
-                if (!$opening) continue;
+                if (! $opening) {
+                    continue;
+                }
                 DB::table('employee_work_rules')->updateOrInsert(
                     ['employee_id' => $employeeId, 'weekday' => $weekday],
                     ['starts_at' => $opening->starts_at, 'ends_at' => $opening->ends_at, 'working' => true, 'created_at' => now(), 'updated_at' => now()],

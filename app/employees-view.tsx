@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarDays, Clock3, ShieldCheck, UserRound, UsersRound } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type PermissionMeta = { label: string; group: string };
 type EmployeeStatus = "ACTIVE" | "UPCOMING" | "INACTIVE" | "TERMINATED" | "ARCHIVED";
@@ -14,19 +14,14 @@ type EmployeeResponse = {
   departments?: Array<{ id: number; name: string }>;
   absences: Array<{ id: string; employee_id: string; kind: string; date_from: string; date_to: string; note?: string }>;
   workRules: Array<{ employee_id: string; weekday: number; starts_at: string | null; ends_at: string | null; working: boolean | number; cycle_weeks?: number; cycle_week?: number }>;
+  capacitySummary?: { today?: { concurrentCapacity: number; staffOnDuty: number }; week: Array<{ date: string; weekday: number; concurrentCapacity: number; staffOnDuty: number }> };
 };
 
 const days = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag", "Søndag"];
 const defaultTimes = (): Record<number, WorkTime> => Object.fromEntries(days.map((_, index) => [index + 1, { start: "08:00", end: index === 4 ? "15:40" : "16:00", working: index < 5, cycleWeeks: 1, cycleWeek: 1 }]));
 const initials = (name: string) => { const parts = name.split(/\s+/).filter(Boolean); return (parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : (parts[0] ?? "MB").slice(0, 2)).toUpperCase(); };
-const demo: Employee[] = [
-  { id: "1", name: "Peter Hartz Jensen", role: "Synsinspektør", active: true, bookingCapacity: true, initials: "PH", permissions: [] },
-  { id: "2", name: "Rasmus Havn Mouritzen", role: "Teknisk ansvarlig / Ejer", active: true, bookingCapacity: true, initials: "RH", permissions: [] },
-  { id: "3", name: "Pernille Havn Mouritzen", role: "Bogholder / blæksprut", active: true, bookingCapacity: false, initials: "PM", permissions: [] },
-];
-
 export function EmployeesView({ onNotify }: { onNotify: (message: string) => void }) {
-  const [employees, setEmployees] = useState<Employee[]>(demo);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("1");
   const [tab, setTab] = useState<"people" | "hours" | "absence" | "access">("people");
@@ -43,9 +38,16 @@ export function EmployeesView({ onNotify }: { onNotify: (message: string) => voi
   const [showCreate, setShowCreate] = useState(false);
   const [savingCreate, setSavingCreate] = useState(false);
   const [createForm, setCreateForm] = useState({ name: "", initials: "", jobTitle: "", role: "Synsinspektør", status: "ACTIVE" as EmployeeStatus, bookingCapacity: true, email: "" });
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [capacitySummary, setCapacitySummary] = useState<EmployeeResponse["capacitySummary"]>();
 
-  useEffect(() => {
-    void fetch("/api/employees", { cache: "no-store" }).then((response) => response.ok ? response.json() as Promise<EmployeeResponse> : Promise.reject()).then((data) => {
+  const loadEmployees = useCallback(async () => {
+    setLoading(true); setLoadError("");
+    try {
+      const response = await fetch("/api/employees", { cache: "no-store" });
+      if (!response.ok) throw new Error("Medarbejderplanen kunne ikke hentes");
+      const data = await response.json() as EmployeeResponse;
       const loaded = data.employees.map((employee) => ({ ...employee, permissions: employee.permissions ?? [], initials: employee.initials ?? initials(employee.name) }));
       setEmployees(loaded);
       setPermissionCatalog(data.permissionCatalog);
@@ -59,8 +61,13 @@ export function EmployeesView({ onNotify }: { onNotify: (message: string) => voi
       for (const employee of loaded) loadedTimes[employee.id] = defaultTimes();
       for (const rule of data.workRules) loadedTimes[String(rule.employee_id)][rule.weekday] = { start: rule.starts_at?.slice(0, 5) ?? "08:00", end: rule.ends_at?.slice(0, 5) ?? "16:00", working: Boolean(rule.working), cycleWeeks: Number(rule.cycle_weeks ?? 1), cycleWeek: Number(rule.cycle_week ?? 1) };
       setWorkTimes(loadedTimes);
-    }).catch(() => onNotify("Medarbejderplanen kunne ikke hentes"));
-  }, [onNotify]);
+      setCapacitySummary(data.capacitySummary);
+    } catch (error) {
+      setEmployees([]); setWorkTimes({}); setPermissionCatalog({});
+      setLoadError(error instanceof Error ? error.message : "Medarbejderplanen kunne ikke hentes");
+    } finally { setLoading(false); }
+  }, []);
+  useEffect(() => { const timer = window.setTimeout(() => void loadEmployees(), 0); return () => window.clearTimeout(timer); }, [loadEmployees]);
 
   const selectedEmployee = employees.find((employee) => employee.id === selectedEmployeeId) ?? employees[0];
   const filteredEmployees = employees.filter((employee) => {
@@ -70,8 +77,7 @@ export function EmployeesView({ onNotify }: { onNotify: (message: string) => voi
     return !needle || [employee.name, employee.initials, employee.role, employee.jobTitle, employee.email, ...(employee.departments ?? [])].filter(Boolean).join(" ").toLowerCase().includes(needle);
   });
   const selectedTimes = workTimes[selectedEmployeeId] ?? defaultTimes();
-  const todayWeekday = ((new Date().getDay() + 6) % 7) + 1;
-  const capacityToday = employees.filter((employee) => employee.active && employee.bookingCapacity && (workTimes[employee.id]?.[todayWeekday]?.working ?? false)).length;
+  const capacityToday = capacitySummary?.today?.concurrentCapacity ?? 0;
   const workSummary = (employee: Employee) => {
     const rules = workTimes[employee.id];
     if (!rules) return "Arbejdsplan ikke hentet";
@@ -79,7 +85,7 @@ export function EmployeesView({ onNotify }: { onNotify: (message: string) => voi
     if (working.length === 0) return "Ingen faste arbejdsdage";
     return `${working.length} arbejdsdage · ${working.map((day) => day.slice(0, 3)).join(", ")}`;
   };
-  const weekCapacity = useMemo(() => days.map((day, index) => ({ day, count: employees.filter((employee) => employee.active && employee.bookingCapacity && (workTimes[employee.id]?.[index + 1]?.working ?? false)).length })), [employees, workTimes]);
+  const weekCapacity = days.map((day, index) => ({ day, count: capacitySummary?.week.find((item) => item.weekday === index + 1)?.concurrentCapacity ?? 0 }));
 
   const saveAbsence = async () => {
     if (!absenceForm.dateFrom || !absenceForm.dateTo) { onNotify("Vælg både fra- og til-dato"); return; }
@@ -156,6 +162,8 @@ export function EmployeesView({ onNotify }: { onNotify: (message: string) => voi
 
   return <div className="module-view employees-view">
     <section className="page-heading"><div><p className="eyebrow">Administration · Bemanding</p><h1>Medarbejdere</h1><p>Profiler, adgang og arbejdsplan samlet ét sted.</p></div>{tab === "people" && <button className="primary-button" onClick={() => setShowCreate(true)}>＋ Opret medarbejder</button>}</section>
+    {loadError && <div className="module-error" role="alert"><span>{loadError}. Ingen standarddata vises som gemte.</span><button className="secondary-button" onClick={() => void loadEmployees()}>Prøv igen</button></div>}
+    {loading && <div className="module-loading">Henter medarbejdere, arbejdsplan og kapacitet…</div>}
     <div className="employee-tabs"><button className={tab === "people" ? "selected" : ""} onClick={() => setTab("people")}><UserRound size={15} /> Medarbejdere</button><button className={tab === "hours" ? "selected" : ""} onClick={() => setTab("hours")}><Clock3 size={15} /> Arbejdsplan</button><button className={tab === "absence" ? "selected" : ""} onClick={() => setTab("absence")}><CalendarDays size={15} /> Ferie og fravær</button><button className={tab === "access" ? "selected" : ""} onClick={() => setTab("access")}><ShieldCheck size={15} /> Adgang</button></div>
     <section className="employee-summary"><div><span>Aktive medarbejdere</span><strong>{active}</strong></div><div><span>Bookingkapacitet i dag</span><strong>{capacityToday}</strong></div><div><span>Planlagt fravær</span><strong>{absences.length}</strong></div></section>
 

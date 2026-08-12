@@ -8,13 +8,14 @@ Bookingformularen viser kun beregnede ledige tider, har en søgbar erhvervskunde
 
 ## Lokal start
 
-Kræver Node.js 22.13 eller nyere.
+Kræver Node.js 22.13 eller nyere, MySQL og PHP 8.4+ (Laravel Herd understøttes automatisk).
 
 ```bash
 npm install
-npm run dev
+cd backend && php artisan migrate && cd ..
+npm run dev:all
 ```
 
-Åbn `http://localhost:4317`. Kør `npm test` for build og grundlæggende tests, og `npm run db:generate` efter ændringer i datamodellen.
+`dev:all` starter frontend, Laravel API og køarbejderen samlet og lukker dem samlet igen. Åbn `http://localhost:4317`. Kør `npm test` for build og grundlæggende tests, `cd backend && php artisan test` for API-tests, og `npm run db:generate` efter ændringer i datamodellen.
 
 Det samlede NAS-testmiljø startes efter [deploy/nas/README.md](deploy/nas/README.md). Se [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for datamodel, integrationsprincipper og overgangsplan.

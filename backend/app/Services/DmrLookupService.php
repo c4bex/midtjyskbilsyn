@@ -25,7 +25,7 @@ class DmrLookupService
                 ->retry(1, 150, throw: false)
                 ->get($baseUrl.'/api/dmr/vehicles', ['registration' => $normalized]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return ['found' => false, 'source' => 'dmr-nas', 'unavailable' => true];
             }
 

@@ -17,7 +17,9 @@ return new class extends Migration
             $candidate = $candidate ?: 'MB';
             $base = $candidate;
             $suffix = 2;
-            while (isset($used[$candidate])) $candidate = $base.mb_strval($suffix++);
+            while (isset($used[$candidate])) {
+                $candidate = $base.mb_strval($suffix++);
+            }
             $used[$candidate] = true;
             DB::table('employees')->where('id', $employee->id)->update(['initials' => $candidate, 'updated_at' => now()]);
         }

@@ -4,6 +4,8 @@ x-api-environment: &api-environment
   APP_ENV: production
   APP_DEBUG: "false"
   APP_URL: ${APP_URL}
+  FRONTEND_URL: ${FRONTEND_URL:-http://100.68.88.2:4321}
+  TRUSTED_FRONTEND_HOSTS: ${TRUSTED_FRONTEND_HOSTS:-}
   APP_KEY: ${APP_KEY}
   LOG_CHANNEL: stderr
   DB_CONNECTION: mysql
@@ -13,16 +15,23 @@ x-api-environment: &api-environment
   DB_USERNAME: ${MYSQL_USER}
   DB_PASSWORD: ${MYSQL_PASSWORD}
   SESSION_DRIVER: database
-  SESSION_SECURE_COOKIE: "false"
+  SESSION_SECURE_COOKIE: ${SESSION_SECURE_COOKIE:-false}
   SESSION_SAME_SITE: strict
   CACHE_STORE: database
   QUEUE_CONNECTION: database
+  MAIL_MAILER: ${MAIL_MAILER:-log}
+  MAIL_SCHEME: ${MAIL_SCHEME:-}
+  MAIL_HOST: ${MAIL_HOST:-127.0.0.1}
+  MAIL_PORT: ${MAIL_PORT:-2525}
+  MAIL_USERNAME: ${MAIL_USERNAME:-}
+  MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+  MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-noreply@localhost}
+  MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Midtjysk Bilsyn}
   BOOKING_API_TOKEN: ${BOOKING_API_TOKEN}
   BOOKING_API_ROLE: "Teknisk ansvarlig / Ejer"
-  # Safe test default; production must override this in the NAS .env.
-  SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-test@test.dk}
-  # Bevidst enkel adgangskode i det private NAS-testmiljø.
-  SEED_ADMIN_PASSWORD: "test"
+  SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:?Angiv administratorens e-mail}
+  SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?Angiv administratorens startkode}
+  SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
   DMR_LOOKUP_BASE_URL: ${DMR_LOOKUP_BASE_URL}
   DMR_LOOKUP_TOKEN: ${DMR_LOOKUP_TOKEN}
   DMR_LOOKUP_DATASET: full
@@ -39,12 +48,12 @@ x-api-environment: &api-environment
   ARVO_API_TOKEN: ${ARVO_API_TOKEN:-}
 
 x-api-service: &api-service
-  image: midtjysk-bilsyn-api:${APP_IMAGE_TAG:-latest}
-  # API'et skal bygges på ny ved hver NAS-udrulning, så rettigheds- og
-  # migrationsændringer ikke skjules af et gammelt lokalt image.
-  pull_policy: build
-  build:
-    context: https://github.com/c4bex/midtjyskbilsyn.git#main:backend
+  # Web og API bygges og testes samlet i GitHub Actions. NAS'en henter præcis
+  # den godkendte udgave og behøver derfor hverken kildekode eller build-værktøjer.
+  # Testmiljøet følger altid den godkendte GHCR-udgave. Et historisk
+  # API_IMAGE-felt i NAS'ens .env må ikke kunne fastholde en gammel lokal build.
+  image: ghcr.io/c4bex/midtjyskbilsyn-api:test
+  pull_policy: always
   restart: unless-stopped
   environment: *api-environment
   volumes:
@@ -115,7 +124,6 @@ services:
     environment:
       NODE_ENV: production
       LARAVEL_API_BASE_URL: http://api:8000
-      BOOKING_API_TOKEN: ${BOOKING_API_TOKEN}
     depends_on:
       api:
         condition: service_healthy

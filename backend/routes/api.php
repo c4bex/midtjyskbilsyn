@@ -6,17 +6,15 @@ use App\Http\Middleware\Permission;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 
 $sessionPayload = static function (): array {
     $user = Auth::user();
     $employee = $user ? DB::table('employees')->where('user_id', $user->id)->first() : null;
     $permissionRows = $employee ? DB::table('employee_permissions')->where('employee_id', $employee->id)->get() : collect();
-    $ownerEmail = (string) env('SEED_ADMIN_EMAIL', '');
+    $ownerEmail = (string) config('app.seed_admin_email', '');
     $isOwner = $employee?->role === 'Teknisk ansvarlig / Ejer'
-        || ($ownerEmail !== '' && $user?->email === $ownerEmail)
-        // Testmiljøets faste testbruger skal altid have fuld adgang.
-        || $user?->email === 'test@test.dk'
-        || in_array(mb_strtolower((string) ($user?->name ?? '')), ['rasmus', 'rasmus havn mouritzen'], true);
+        || ($ownerEmail !== '' && $user?->email === $ownerEmail);
     $permissions = $isOwner
         ? array_keys(Permission::catalog())
         : ($permissionRows->isNotEmpty() ? $permissionRows->where('allowed', true)->pluck('permission_key')->values()->all() : Permission::rolePermissions((string) ($employee?->role ?? '')));
@@ -31,6 +29,9 @@ Route::middleware('web')->group(function () use ($sessionPayload) {
             return response()->json(['error' => 'Forkert e-mail eller adgangskode'], 401);
         }
         request()->session()->regenerate();
+        if (Schema::hasColumn('users', 'last_login_at')) {
+            DB::table('users')->where('id', Auth::id())->update(['last_login_at' => now()]);
+        }
 
         return response()->json($sessionPayload());
     })->middleware('throttle:5,1');
@@ -52,6 +53,9 @@ Route::middleware(['web', 'throttle:30,1'])->prefix('public')->group(function ()
     Route::get('/availability', [OperationsController::class, 'publicAvailability']);
     Route::get('/vehicle-lookup', [OperationsController::class, 'publicVehicleLookup'])->middleware('throttle:20,1');
     Route::post('/bookings', [OperationsController::class, 'publicCreateBooking']);
+    Route::get('/bookings/manage', [OperationsController::class, 'publicManagedBooking']);
+    Route::patch('/bookings/manage', [OperationsController::class, 'publicUpdateManagedBooking'])->middleware('throttle:10,1');
+    Route::post('/bookings/lookup', [OperationsController::class, 'publicLookupBooking'])->middleware('throttle:8,1');
 });
 
 // Ekstern branchekundeportal: separat session, men samme kalender og bookingmotor.
@@ -69,44 +73,57 @@ Route::middleware(['web', 'throttle:60,1'])->prefix('portal')->group(function ()
 });
 
 Route::middleware(['web', 'api.token', 'throttle:120,1'])->group(function () {
-    Route::get('/health', [OperationsController::class, 'health']);
-    Route::get('/bookings', [OperationsController::class, 'bookings']);
+    Route::get('/health', [OperationsController::class, 'health'])->middleware('permission:audit.read');
+    Route::get('/notifications', [OperationsController::class, 'notifications']);
+    Route::post('/notifications/read-all', [OperationsController::class, 'readAllNotifications']);
+    Route::patch('/notifications/{notification}', [OperationsController::class, 'updateNotification']);
+    Route::get('/bookings', [OperationsController::class, 'bookings'])->middleware('permission:bookings.read');
     Route::post('/bookings', [OperationsController::class, 'createBooking'])->middleware('permission:bookings.write');
     Route::patch('/bookings/{booking}', [OperationsController::class, 'updateBooking'])->middleware('permission:bookings.write');
     Route::delete('/bookings/{booking}', [OperationsController::class, 'deleteBooking'])->middleware('permission:bookings.write');
-    Route::get('/customers', [OperationsController::class, 'customers']);
-    Route::get('/search', [OperationsController::class, 'search']);
+    Route::get('/customers', [OperationsController::class, 'customers'])->middleware('permission:customers.read');
+    Route::get('/search', [OperationsController::class, 'search'])->middleware('permission:bookings.read');
     Route::patch('/customers/{customer}/billing', [OperationsController::class, 'updateCustomerBilling'])->middleware('permission:customers.write');
-    Route::get('/vehicles/lookup', [OperationsController::class, 'vehicleLookup']);
-    Route::get('/calendar/week', [OperationsController::class, 'calendarWeek']);
+    Route::get('/vehicles/lookup', [OperationsController::class, 'vehicleLookup'])->middleware('permission:customers.read');
+    Route::get('/calendar/week', [OperationsController::class, 'calendarWeek'])->middleware('permission:bookings.read');
     Route::get('/planning', [OperationsController::class, 'planning']);
+    Route::get('/planning/v2/day', [OperationsController::class, 'capacityDayPlan'])->middleware('permission:bookings.read');
+    Route::patch('/planning/v2/profiles/{profile}', [OperationsController::class, 'updateCapacityProfileV2'])->middleware('permission:capacity.manage');
+    Route::post('/planning/v2/recurring-buffers', [OperationsController::class, 'createRecurringBufferV2'])->middleware('permission:capacity.manage');
+    Route::patch('/planning/v2/recurring-buffers/{buffer}', [OperationsController::class, 'updateRecurringBufferV2'])->middleware('permission:capacity.manage');
+    Route::delete('/planning/v2/recurring-buffers/{buffer}', [OperationsController::class, 'deleteRecurringBufferV2'])->middleware('permission:capacity.manage');
+    Route::post('/planning/v2/overrides', [OperationsController::class, 'createScheduleOverrideV2'])->middleware('permission:capacity.manage');
+    Route::delete('/planning/v2/overrides/{override}', [OperationsController::class, 'deleteScheduleOverrideV2'])->middleware('permission:capacity.manage');
     Route::patch('/planning/inspection-types/{inspectionType}', [OperationsController::class, 'updateInspectionType'])->middleware('permission:settings.write');
     Route::patch('/planning/profiles/{profile}', [OperationsController::class, 'updateCalendarProfile'])->middleware('permission:settings.write');
     Route::patch('/planning/days/{date}', [OperationsController::class, 'updatePlanningDay'])->middleware('permission:settings.write');
     Route::post('/planning/buffers', [OperationsController::class, 'createBuffer'])->middleware('permission:settings.write');
     Route::delete('/planning/buffers/{buffer}', [OperationsController::class, 'deleteBuffer'])->middleware('permission:settings.write');
     Route::get('/availability', [OperationsController::class, 'availability']);
+    Route::get('/availability/holiday-suggestions', [OperationsController::class, 'holidaySuggestions']);
+    Route::post('/availability/holiday-suggestions/apply', [OperationsController::class, 'applyHolidaySuggestions'])->middleware('permission:settings.write');
     Route::patch('/availability', [OperationsController::class, 'updateAvailability'])->middleware('permission:settings.write');
     Route::post('/availability', [OperationsController::class, 'createClosure'])->middleware('permission:settings.write');
     Route::delete('/availability/{rule}', [OperationsController::class, 'deleteClosure'])->middleware('permission:settings.write');
     Route::get('/employees', [OperationsController::class, 'employees'])->middleware('permission:employees.read');
-    Route::post('/employees', [OperationsController::class, 'updateEmployee'])->middleware('permission:employees.write');
+    Route::post('/employees', [OperationsController::class, 'updateEmployee']);
     Route::get('/business-portal/companies', [OperationsController::class, 'businessPortalCompanies'])->middleware('permission:settings.write');
     Route::post('/business-portal', [OperationsController::class, 'updateBusinessPortal'])->middleware('permission:settings.write');
-    Route::get('/invoices', [OperationsController::class, 'invoices']);
+    Route::delete('/business-portal/users/{portalUser}', [OperationsController::class, 'deleteBusinessPortalUser'])->middleware('permission:settings.write');
+    Route::get('/invoices', [OperationsController::class, 'invoices'])->middleware('permission:invoices.read');
     Route::patch('/invoices', [OperationsController::class, 'updateInvoice'])->middleware('permission:invoices.write');
-    Route::post('/invoices/approve', [OperationsController::class, 'approveInvoices'])->middleware('permission:invoices.write');
-    Route::get('/audit', [OperationsController::class, 'auditEvents']);
-    Route::get('/imports', [OperationsController::class, 'imports']);
+    Route::post('/invoices/approve', [OperationsController::class, 'approveInvoices'])->middleware('permission:invoices.approve');
+    Route::get('/audit', [OperationsController::class, 'auditEvents'])->middleware('permission:audit.read');
+    Route::get('/imports', [OperationsController::class, 'imports'])->middleware('permission:imports.read');
     Route::post('/imports/validate', [OperationsController::class, 'validateImport'])->middleware('permission:imports.write');
-    Route::get('/sms/queue', [OperationsController::class, 'smsQueue']);
-    Route::get('/sms/settings', [OperationsController::class, 'smsSettings']);
+    Route::get('/sms/queue', [OperationsController::class, 'smsQueue'])->middleware('permission:settings.write');
+    Route::get('/sms/settings', [OperationsController::class, 'smsSettings'])->middleware('permission:settings.write');
     Route::patch('/sms/settings', [OperationsController::class, 'updateSmsSettings'])->middleware('permission:settings.write');
-    Route::get('/sms/templates', [OperationsController::class, 'smsTemplates']);
+    Route::get('/sms/templates', [OperationsController::class, 'smsTemplates'])->middleware('permission:settings.write');
     Route::patch('/sms/templates/{code}', [OperationsController::class, 'updateSmsTemplate'])->middleware('permission:settings.write');
     Route::post('/sms/templates/{code}/reset', [OperationsController::class, 'resetSmsTemplate'])->middleware('permission:settings.write');
-    Route::get('/sms/messages', [OperationsController::class, 'smsMessages']);
-    Route::get('/customers/{customer}/sms-preferences', [OperationsController::class, 'businessSmsPreferences']);
+    Route::get('/sms/messages', [OperationsController::class, 'smsMessages'])->middleware('permission:settings.write');
+    Route::get('/customers/{customer}/sms-preferences', [OperationsController::class, 'businessSmsPreferences'])->middleware('permission:customers.read');
     Route::patch('/customers/{customer}/sms-preferences', [OperationsController::class, 'updateBusinessSmsPreferences'])->middleware('permission:customers.write');
     Route::get('/ai/bootstrap', [AiAssistantController::class, 'bootstrap'])->middleware('permission:ai.use');
     Route::post('/ai/conversations', [AiAssistantController::class, 'createConversation'])->middleware('permission:ai.use');
