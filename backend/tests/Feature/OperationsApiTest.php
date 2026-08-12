@@ -69,6 +69,32 @@ class OperationsApiTest extends TestCase
             ->assertJsonCount(count(Permission::catalog()), 'permissions');
     }
 
+    public function test_seeder_preserves_the_only_existing_account_when_old_nas_email_differs(): void
+    {
+        $this->user->update(['name' => 'Rasmus', 'email' => 'rasmus@example.test']);
+        DB::table('employees')->where('user_id', $this->user->id)->update([
+            'email' => 'rasmus@example.test',
+            'role' => 'Begrænset adgang',
+            'job_title' => 'Medarbejder',
+        ]);
+        config()->set('app.seed_admin_email', 'old-nas-owner@example.test');
+        config()->set('app.seed_admin_password', 'deployment-password');
+        config()->set('app.seed_admin_name', 'Administrator');
+
+        $this->seed();
+
+        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseHas('users', ['id' => $this->user->id, 'email' => 'rasmus@example.test']);
+        $this->assertDatabaseHas('employees', [
+            'user_id' => $this->user->id,
+            'email' => 'rasmus@example.test',
+            'role' => 'Teknisk ansvarlig / Ejer',
+        ]);
+        $this->actingAs($this->user)->getJson('/api/session')
+            ->assertOk()
+            ->assertJsonCount(count(Permission::catalog()), 'permissions');
+    }
+
     public function test_unauthenticated_requests_are_rejected(): void
     {
         $this->getJson('/api/bookings?date=2026-08-04')->assertUnauthorized();

@@ -24,22 +24,30 @@ class DatabaseSeeder extends Seeder
         if ($adminEmail && $adminPassword) {
             // Deployment runs the seeder after every migration. Existing accounts
             // must therefore never have their password reset by a deployment.
-            $admin = User::firstOrCreate(['email' => $adminEmail], [
+            // Older NAS installations used another seed address; when there is
+            // only one internal account, preserve that account and promote it
+            // instead of creating a second owner that nobody is signed in as.
+            $admin = User::where('email', $adminEmail)->first();
+            if (! $admin && User::count() === 1) {
+                $admin = User::query()->first();
+            }
+            $admin ??= User::create([
                 'name' => $adminName,
+                'email' => $adminEmail,
                 'password' => bcrypt($adminPassword),
             ]);
         }
 
         if ($admin && Schema::hasTable('employees')) {
             $ownerEmployee = DB::table('employees')->where('user_id', $admin->id)->first()
-                ?? DB::table('employees')->where('email', $adminEmail)->first()
+                ?? DB::table('employees')->where('email', $admin->email)->first()
                 ?? DB::table('employees')->where('display_name', $adminName)->first();
             if (! $ownerEmployee) {
                 $nameParts = collect(preg_split('/\s+/', $adminName))->filter()->values();
                 $initials = mb_strtoupper(mb_substr((string) $nameParts->first(), 0, 1).mb_substr((string) $nameParts->last(), 0, 1));
                 $ownerEmployeeId = DB::table('employees')->insertGetId([
                     'user_id' => $admin->id, 'display_name' => $adminName, 'initials' => $initials,
-                    'email' => $adminEmail, 'job_title' => 'Teknisk ansvarlig / Ejer',
+                    'email' => $admin->email, 'job_title' => 'Teknisk ansvarlig / Ejer',
                     'role' => 'Teknisk ansvarlig / Ejer', 'status' => 'ACTIVE',
                     'active' => true, 'booking_capacity' => true,
                     'created_at' => now(), 'updated_at' => now(),
@@ -51,7 +59,7 @@ class DatabaseSeeder extends Seeder
                 // stale employee record can never lock the owner out of navigation.
                 DB::table('employees')->where('id', $ownerEmployeeId)->update([
                     'user_id' => $admin->id,
-                    'email' => $adminEmail,
+                    'email' => $admin->email,
                     'role' => 'Teknisk ansvarlig / Ejer',
                     'job_title' => 'Teknisk ansvarlig / Ejer',
                     'status' => 'ACTIVE',
