@@ -4,7 +4,7 @@ x-api-environment: &api-environment
   APP_ENV: production
   APP_DEBUG: "false"
   APP_URL: ${APP_URL}
-  FRONTEND_URL: ${FRONTEND_URL:?Angiv den offentlige adresse til systemet}
+  FRONTEND_URL: ${FRONTEND_URL:-http://100.68.88.2:4321}
   TRUSTED_FRONTEND_HOSTS: ${TRUSTED_FRONTEND_HOSTS:-}
   APP_KEY: ${APP_KEY}
   LOG_CHANNEL: stderr
